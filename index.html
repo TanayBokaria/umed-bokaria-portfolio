@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- build: 2026-07-03T18:27:09Z -->
+  <!-- build: 2026-07-03T18:41:33Z -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Umed Singh Bokaria Family Portfolio</title>
@@ -1232,7 +1232,7 @@ let _pendingABRows = null; // holds parsed rows for review modal — loaded from
 let abActiveFilter = 'all';
 
 // Load deleted IDs from localStorage to persist deletions across sessions
-const _deletedIds = JSON.parse(localStorage.getItem('bokaria_piyush_deleted')||'[]');
+const _deletedIds = JSON.parse(localStorage.getItem('bokaria_umed_deleted')||'[]');
 let portfolioData = PORTFOLIO.map(h=>({...h})).filter(h=>!_deletedIds.includes(h.id));
 let navFetchFailed = [];   // codes that failed during last refresh
 let autoRefreshStatus = null; // populated from Apps Script auto_refresh_status in config tab
@@ -4083,9 +4083,9 @@ async function confirmDelete(id){
       portfolioData = portfolioData.filter(x=>x.id!==id);
 
   try{
-    const dels = JSON.parse(localStorage.getItem('bokaria_piyush_deleted')||'[]');
+    const dels = JSON.parse(localStorage.getItem('bokaria_umed_deleted')||'[]');
     if(!dels.includes(id)) dels.push(id);
-    localStorage.setItem('bokaria_piyush_deleted', JSON.stringify(dels));
+    localStorage.setItem('bokaria_umed_deleted', JSON.stringify(dels));
   }catch(e){}
   lastRefreshed = new Date();
 
