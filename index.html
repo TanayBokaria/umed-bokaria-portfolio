@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- build: 2026-07-03T07:42:05Z -->
+  <!-- build: 2026-07-03T17:05:28Z -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Umed Singh Bokaria Family Portfolio</title>
@@ -619,7 +619,7 @@
     <div class="stat-card"><div class="stat-label">Total Invested</div><div class="stat-value" id="totalInvested">—</div><div class="stat-sub" style="color:var(--text-muted)">Across 44 holdings</div></div>
     <div class="stat-card teal"><div class="stat-label">Current Value</div><div class="stat-value" id="totalCurrent">—</div><div class="stat-sub" id="totalGainAmt">—</div></div>
     <div class="stat-card green"><div class="stat-label">Overall Return</div><div class="stat-value" id="totalReturn">—</div><div class="stat-sub" style="color:var(--text-muted)">Absolute since inception</div></div>
-    <div class="stat-card purple" style="cursor:pointer" onclick="showFreshDetail()" title="Click to see details"><div class="stat-label">Data Freshness</div><div class="stat-value" id="navCoverage">—</div><div class="stat-sub" id="sheetsSyncStatus" style="color:var(--text-muted)">Hit Refresh NAVs</div></div>
+    <div class="stat-card purple" style="cursor:pointer" onclick="showFreshDetail()" title="Click to see details"><div class="stat-label">Data Freshness</div><div class="stat-value" id="navCoverage">—</div><div class="stat-sub" id="sheetsSyncStatus" style="color:var(--text-muted)">Hit Refresh NAVs</div><div id="autoRefreshLine" style="font-size:10px;color:var(--text-muted);margin-top:3px;letter-spacing:0.2px"></div></div>
   </div>
 
   
@@ -1199,6 +1199,34 @@ let abActiveFilter = 'all';
 const _deletedIds = JSON.parse(localStorage.getItem('bokaria_piyush_deleted')||'[]');
 let portfolioData = PORTFOLIO.map(h=>({...h})).filter(h=>!_deletedIds.includes(h.id));
 let navFetchFailed = [];   // codes that failed during last refresh
+let autoRefreshStatus = null; // populated from Apps Script auto_refresh_status in config tab
+
+function renderAutoRefreshLine(){
+  const el = document.getElementById('autoRefreshLine');
+  if(!el) return;
+  const s = autoRefreshStatus;
+  if(!s){ el.textContent = ''; return; }
+  const parts = [];
+  try{
+    const nextRun = s.nextRun ? new Date(s.nextRun) : null;
+    const lastRun = s.lastRun ? new Date(s.lastRun) : null;
+    const now = new Date();
+    if(nextRun && nextRun > now){
+      const mins = Math.round((nextRun - now) / 60000);
+      const h = Math.floor(mins/60), m = mins%60;
+      parts.push('Auto ↻ in ' + (h>0?h+'h ':'') + m+'m');
+    }
+    if(lastRun){
+      const fmt = lastRun.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})
+                + ' ' + lastRun.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});
+      parts.push('last: '+fmt);
+    }
+    if(s.persistentCodes && s.persistentCodes.length > 0){
+      parts.push('\u26a0 '+s.persistentCodes.length+' code'+(s.persistentCodes.length>1?'s':'')+' failing');
+    }
+  }catch(e){}
+  el.textContent = parts.join(' \u00b7 ');
+}
 let navRenamed = [];       // {id, oldName, newName} updated during last refresh
 let navApiDown = false;    // true when circuit breaker trips (both sources down)
 let navFromFallback = [];  // codes that succeeded via mfdata.in fallback
@@ -1656,6 +1684,7 @@ async function fetchUSDINR(){
       document.getElementById('fxPill').style.color='var(--green)';
     }
   }catch(e){
+    logError('fetchUSDINR', e);
     // Fallback to a reasonable rate if API fails
     if(!usdInrRate) usdInrRate=84.5;
     const _fp2=document.getElementById('fxPill');if(_fp2)_fp2.textContent=`USD/INR: ₹${usdInrRate.toFixed(2)} (cached)`;
@@ -1789,7 +1818,7 @@ async function fetchStockPrice(symbol){
         }
       });
     }
-  }catch(e){console.error('Finnhub error',symbol,e);}
+  }catch(e){console.error('Finnhub error',symbol,e); logError('fetchStockPrice', e, {detail:`symbol=${symbol}`});}
 }
 
 function nyseTotal(filter){
@@ -2059,7 +2088,7 @@ async function loadSIMap(){
       if(folio && sl) map[folio]=sl; // last row for a folio wins
     });
     Object.assign(window.SI_MAP, map);
-  }catch(e){ console.warn('loadSIMap failed:', e.message); }
+  }catch(e){ console.warn('loadSIMap failed:', e.message); logError('loadSIMap', e); }
 }
 
 function renderSlNumList(){
@@ -2144,6 +2173,7 @@ async function saveSlNumbers(){
     renderSlNumList();
   }catch(e){
     console.error('saveSlNumbers failed:', e);
+    logError('saveSlNumbers', e);
     statusEl.style.color='var(--red)';
     statusEl.textContent='⚠ Save failed: ' + e.message + ' — if this is the first time, create a "si_map" tab in the Sheet with header row: Folio | Sl# | Updated By | Updated On';
   }
@@ -2843,6 +2873,7 @@ async function applyAIDiff(cardEl, diffStr){
       });
       applied++;
     }catch(e){
+      logError('applyAIDiff', e, {fund: item.fund_name||'', investor: h.investor||'', detail:'update rollback'});
       h.currentValue = oldVal; // rollback in-memory
       errors.push(`Failed to save "${item.fund_name}": ${e.message}`);
       failed++;
@@ -2889,6 +2920,7 @@ async function applyAIDiff(cardEl, diffStr){
       });
       applied++;
     }catch(e){
+      logError('applyAIDiff', e, {fund: newHolding?.fund||'', investor: newHolding?.investor||'', detail:'new holding rollback'});
       const idx = portfolioData.findIndex(h => h.id === newId);
       if(idx >= 0) portfolioData.splice(idx, 1);
       errors.push(`Failed to add "${item.fund_name}": ${e.message}`);
@@ -3263,7 +3295,7 @@ async function loadFromSheets(){
     // Pre-load all Gemini keys from config tab
     if(!_geminiKeys){
       try{
-        const cfgUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/config!A1:B20`;
+        const cfgUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/config!A1:B30`;
         const cfgR = await fetchWithTimeout(cfgUrl, {headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`}});
         if(cfgR.ok){
           const cfgData = await cfgR.json();
@@ -3286,6 +3318,19 @@ async function loadFromSheets(){
         }
       }catch(e){ console.warn('Config tab read skipped:', e.message); }
     }
+    // Auto-refresh status from Apps Script (stored in config tab)
+    try{
+      const cfgUrl2 = `https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/config!A1:B30`;
+      const cfgR2 = await fetchWithTimeout(cfgUrl2, {headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`}});
+      if(cfgR2.ok){
+        const cfgData2 = await cfgR2.json();
+        const cfgRows2 = cfgData2.values || [];
+        const arRow = cfgRows2.find(r => (r[0]||'').toString().trim().toLowerCase() === 'auto_refresh_status');
+        if(arRow && arRow[1]){
+          try{ autoRefreshStatus = JSON.parse(arRow[1]); renderAutoRefreshLine(); }catch(e2){}
+        }
+      }
+    }catch(e){ /* config tab may not have auto_refresh_status yet */ }
     // Load Priya's Sl# tracking numbers
     await loadSIMap();
     // Load PMS/AIF value updates
@@ -3757,7 +3802,7 @@ async function addNewFund(){
     try{
       const url=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/si_map!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
       await fetchWithTimeout(url,{method:'POST',headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[folio,siNum,'Priya',fmtDate(new Date())]]})});
-    }catch(e){ console.warn('Sl# save on Add Fund failed:', e.message); }
+    }catch(e){ console.warn('Sl# save on Add Fund failed:', e.message); logError('slSaveOnAddFund', e); }
   }
 
   statusEl.style.display='block'; statusEl.style.color='var(--green)';
@@ -3767,6 +3812,33 @@ async function addNewFund(){
 
   // Close modal after a short delay
   setTimeout(()=>resetAndCloseAddFund(), 2000);
+}
+
+async function saveNewHoldingToSheets(h, notes=''){
+  if(!sheetsConfig?.accessToken||!sheetsConfig?.sheetId)return false;
+  try{
+    const vals=[[
+      h.id, h.investor, h.fund, h.house||'', h.folio||'',
+      h.type, h.category, h.invested||0, h.units||'',
+      h.navCost||'', h.currentValue||0, h.purchaseDate||'',
+      h.soaDate||'', fmtDate(new Date()), h.schemeCode||'',
+      h.originalName||h.fund, h.currentName||h.fund, notes
+    ]];
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/new_holdings!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const r=await fetchWithTimeout(url,{method:'POST',headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({values:vals})});
+    if(!r.ok){
+      const err=await r.json().catch(()=>({}));
+      console.error('Sheets save error:', JSON.stringify(err));
+      alert('Google Sheets save failed: '+(err?.error?.message||r.status)+'\nPlease check your Sheets connection and try again.');
+      return false;
+    }
+    return true;
+  }catch(e){
+    console.error('saveNewHoldingToSheets exception:',e);
+    logError('saveNewHoldingToSheets', e);
+    alert('Google Sheets save error: '+e.message);
+    return false;
+  }
 }
 
 // ═══════════════════════════════════
@@ -4491,6 +4563,7 @@ async function handleSOAUpload(event){
           }
         }catch(ge){
           console.warn('Gemini extraction failed:', ge.message);
+          logError('geminiSOAExtract', ge, {detail: file?.name||currentFileName||''});
           extracted = parseMFStatement(text, file.name);
           if(extracted.length > 0){
             extracted[0].aiFailure = true;
@@ -5662,6 +5735,7 @@ async function applySOACard(idx, state, matchedId){
 
   } catch(err){
     console.error('applySOACard error:', err);
+    logError('applySOACard', err, {fund: fname||'', investor: inv||'', detail: `state=${state} matchedId=${matchedId}`});
     if(applyBtn){
       applyBtn.disabled = false;
       applyBtn.innerHTML = state === 'update' ? 'Update Entry' : 'Add to Dashboard';
@@ -5736,6 +5810,7 @@ async function saveSinglePMSValue(h, value, invested, date){
     return true;
   }catch(e){
     console.error('saveSinglePMSValue error',e);
+    logError('saveSinglePMSValue', e);
     return false;
   }
 }
@@ -5797,6 +5872,7 @@ async function handleABUpload(event){
       const rows = await parseABFile(file);
       allParsed = allParsed.concat(rows);
     }catch(e){
+      logError('parseABFile', e, {detail: file.name});
       parseErrors.push({ file: file.name, msg: e.message });
     }
   }
@@ -6194,6 +6270,7 @@ async function commitABImport(rows){
 
   }catch(err){
     console.error('commitABImport error:', err);
+    logError('commitABImport', err, {detail: `${rows?.length||0} rows attempted`});
     // Restore buttons so Priya can retry
     if(importBtn){ importBtn.disabled = false; importBtn.innerHTML = 'Import to Dashboard'; }
     if(cancelBtn) cancelBtn.disabled = false;
@@ -6259,6 +6336,7 @@ async function saveABHoldingsToSheets(rows, asOf){
     return {ok:true};
   }catch(e){
     console.error('saveABHoldingsToSheets error:', e);
+    logError('saveABHoldingsToSheets', e);
     return {ok:false, reason: e.message||String(e)};
   }
 }
