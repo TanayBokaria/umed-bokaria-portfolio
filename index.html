@@ -1511,7 +1511,7 @@ async function refreshNAVs(){
 
   // 4. Write full portfolio snapshot to Sheets — only if NAVs actually loaded (don't overwrite good data with failed-refresh values)
   const navSuccessCount=codes.length-navFetchFailed.length;
-  if(sheetsConnected && navSuccessCount>0){
+  if(sheetsConnected && (navSuccessCount>0 || portfolioData.length>0)){
     document.getElementById('loadingText').textContent='Saving to Sheets';
     st.textContent='Saving snapshot to Google Sheets...';
     const _snapOk = await writePortfolioSnapshot();
@@ -5760,13 +5760,11 @@ async function saveSinglePMSValue(h, value, invested, date){
 // Falls back to filename inference if UserId not in map.
 // This object is populated at Sheets connect time by loadABUserMapFromSheets().
 let AB_USER_MAP = {
-  // Pre-seeded known UserIds for Piyush Bokaria family
+  // Pre-seeded known UserIds for Umed Singh Bokaria family
   // Additional entries loaded dynamically from Google Sheet config tab
-  '1014581': 'Piyush Bokaria',
-  '748497':  'Piyush Bokaria HUF',
-  '1014137': 'Babita Bokaria',
-  '3062860': 'Rohan Bokaria',
-  // Kavya Bokaria UserId: add to Sheet config as ab_user_USERID
+  '1014668': 'Umed Singh Bokaria',
+  '749619':  'Umed Singh Bokaria HUF',
+  '1014163': 'Sushila Bokaria',
 };
 
 // Load AB_USER_MAP from Sheet config tab — looks for rows where column A starts with "ab_user_"
