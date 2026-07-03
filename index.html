@@ -3153,7 +3153,7 @@ async function submitIssueReport() {
   // status message remains visible until she clicks Cancel or Submit again.
 }
 
-function loadSheetsConfig(){try{const s=localStorage.getItem(LS_KEY);if(s){sheetsConfig=JSON.parse(s);return true;}}catch(e){}return false;}
+function loadSheetsConfig(){try{const s=localStorage.getItem(LS_KEY);if(s){sheetsConfig=JSON.parse(s);if(sheetsConfig.sheetId&&sheetsConfig.sheetId!==DEFAULT_SHEET_ID){console.warn('loadSheetsConfig: stored sheetId mismatch — overriding with DEFAULT_SHEET_ID');sheetsConfig.sheetId=DEFAULT_SHEET_ID;}return true;}}catch(e){}return false;}
 function saveSheetsConfig(cfg){sheetsConfig=cfg;try{localStorage.setItem(LS_KEY,JSON.stringify({sheetId:cfg.sheetId,clientId:cfg.clientId}));}catch(e){}}
 // ── Error Logging (Layer 1) ───────────────────────────────────────────────────
 async function logError(fnName, error, context={}) {
