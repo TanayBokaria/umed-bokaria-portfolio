@@ -644,11 +644,8 @@
     <div class="panel-body" style="padding-bottom:8px">
       <div class="filter-tabs" id="tableFilter">
         <button class="filter-tab active" onclick="filterTable('all',this)">All Members</button>
-        <button class="filter-tab" onclick="filterTable('Umed Singh Bokaria',this)"><span class="member-dot" style="background:var(--piyush)"></span>Piyush</button>
-        <button class="filter-tab" onclick="filterTable('Sushila Bokaria',this)"><span class="member-dot" style="background:var(--babita)"></span>Babita</button>
-        <button class="filter-tab" onclick="filterTable(/* removed 'Rohan Bokaria' */,this)"><span class="member-dot" style="background:var(--rohan)"></span>Rohan</button>
-        <button class="filter-tab" onclick="filterTable(/* removed 'Kavya Bokaria' */,this)"><span class="member-dot" style="background:var(--kavya)"></span>Kavya</button>
-        <button class="filter-tab" onclick="filterTable(/* removed 'Piyush Bokaria HUF' */,this)"><span class="member-dot" style="background:var(--huf)"></span>HUF</button>
+        <button class="filter-tab" onclick="filterTable('Umed Singh Bokaria',this)"><span class="member-dot" style="background:var(--piyush)"></span>Umed Singh</button>
+        <button class="filter-tab" onclick="filterTable('Sushila Bokaria',this)"><span class="member-dot" style="background:var(--babita)"></span>Sushila</button>
       </div>
     </div>
     <div class="table-scroll">
@@ -716,9 +713,8 @@
     <div class="panel-body" style="padding-bottom:8px">
       <div class="filter-tabs" id="nyseFilter">
         <button class="filter-tab active" onclick="filterNYSE('all',this)">All Members</button>
-        <button class="filter-tab" onclick="filterNYSE('Piyush Bokaria',this)"><span class="member-dot" style="background:var(--piyush)"></span>Piyush</button>
-        <button class="filter-tab" onclick="filterNYSE('Babita Bokaria',this)"><span class="member-dot" style="background:var(--babita)"></span>Babita</button>
-        <button class="filter-tab" onclick="filterNYSE('Kavya Bokaria',this)"><span class="member-dot" style="background:var(--kavya)"></span>Kavya</button>
+        <button class="filter-tab" onclick="filterNYSE('Umed Singh Bokaria',this)"><span class="member-dot" style="background:var(--piyush)"></span>Umed Singh</button>
+        <button class="filter-tab" onclick="filterNYSE('Sushila Bokaria',this)"><span class="member-dot" style="background:var(--babita)"></span>Sushila</button>
       </div>
     </div>
     <div class="table-scroll">
@@ -758,11 +754,9 @@
     <div class="panel-body" style="padding-bottom:8px">
       <div class="filter-tabs" id="abFilterTabs">
         <button class="filter-tab active" onclick="filterAB('all',this)">All Members</button>
-        <button class="filter-tab" onclick="filterAB('Piyush Bokaria',this)"><span class="member-dot" style="background:var(--piyush)"></span>Piyush</button>
-        <button class="filter-tab" onclick="filterAB('Babita Bokaria',this)"><span class="member-dot" style="background:var(--babita)"></span>Babita</button>
-        <button class="filter-tab" onclick="filterAB('Rohan Bokaria',this)"><span class="member-dot" style="background:var(--rohan)"></span>Rohan</button>
-        <button class="filter-tab" onclick="filterAB('Kavya Bokaria',this)"><span class="member-dot" style="background:var(--kavya)"></span>Kavya</button>
-        <button class="filter-tab" onclick="filterAB('Piyush Bokaria HUF',this)"><span class="member-dot" style="background:var(--huf)"></span>HUF</button>
+        <button class="filter-tab" onclick="filterAB('Umed Singh Bokaria',this)"><span class="member-dot" style="background:var(--piyush)"></span>Umed Singh</button>
+        <button class="filter-tab" onclick="filterAB('Sushila Bokaria',this)"><span class="member-dot" style="background:var(--babita)"></span>Sushila</button>
+        <button class="filter-tab" onclick="filterAB('Umed Singh Bokaria HUF',this)"><span class="member-dot" style="background:var(--huf)"></span>HUF</button>
       </div>
     </div>
     <div class="table-scroll">
@@ -837,11 +831,9 @@
         <label class="modal-label">Investor *</label>
         <select class="modal-input" id="nf_investor">
           <option value="">— Select —</option>
-          <option value="Piyush Bokaria">Piyush Bokaria</option>
-          <option value="Babita Bokaria">Babita Bokaria</option>
-          <option value="Rohan Bokaria">Rohan Bokaria</option>
-          <option value="Kavya Bokaria">Kavya Bokaria</option>
-          <option value="Piyush Bokaria HUF">Piyush Bokaria HUF</option>
+          <option value="Umed Singh Bokaria">Umed Singh Bokaria</option>
+          <option value="Sushila Bokaria">Sushila Bokaria</option>
+          <option value="Umed Singh Bokaria HUF">Umed Singh Bokaria HUF</option>
         </select>
       </div>
 
@@ -1183,11 +1175,9 @@ const PORTFOLIO = [
 ];
 
 const MEMBER_META = {
-  'Piyush Bokaria':     {color:'#e8a838', short:'PB',  label:'Father'},
-  'Babita Bokaria':     {color:'#4db8a0', short:'BB',  label:'Mother'},
-  'Rohan Bokaria':      {color:'#7b6fe0', short:'RB',  label:'Son'},
-  'Kavya Bokaria':      {color:'#e05c5c', short:'KB',  label:'Daughter'},
-  'Piyush Bokaria HUF': {color:'#3a9fd4', short:'HUF', label:'HUF'},
+  'Umed Singh Bokaria':     {color:'#e8a838', short:'USB', label:'Umed Singh'},
+  'Sushila Bokaria':        {color:'#4db8a0', short:'SB',  label:'Sushila'},
+  'Umed Singh Bokaria HUF': {color:'#3a9fd4', short:'HUF', label:'HUF'},
 };
 const MF_NAMES = {'118778':'Nippon Small Cap','148457':'Nippon Multi Asset','148500':'Mirae Diversified Equity Allocator FoF','148516':'ICICI ESG','148928':'Mirae NYSE FANG+','120158':'Kotak Equity Opps','118632':'Nippon Large Cap','152728':'ICICI Energy Opps','145552':'Motilal Nasdaq 100','139872':'Motilal Bal Advantage','119727':'SBI Focused Equity','148609':'HDFC Dividend Yield','148574':'Mirae ESG Leaders','148986':'HDFC Banking & Fin','142388':'Edelweiss Recent IPO','150358':'Mirae Nifty SDL 2027','118784':'Nippon Value','150470':'Mirae Bal Advantage','120596':'ICICI L&M Cap','118955':'HDFC Flexi Cap','118535':'Franklin Flexi Cap','119076':'DSP Flexi Cap','151580':'ICICI Innovation','152056':'DSP Multi Asset','148883':'Canara Robeco Focused','148958':'PP Conservative Hybrid','120323':'ICICI Value Discovery','122639':'Parag Parikh Flexi Cap','118950':'HDFC Focused 30'};
 
@@ -1781,7 +1771,7 @@ function promptForGeminiKey(){
   });
 }
 
-const MEMBERS = ['Piyush Bokaria','Babita Bokaria','Rohan Bokaria','Kavya Bokaria','Piyush Bokaria HUF'];
+const MEMBERS = ['Umed Singh Bokaria','Sushila Bokaria','Umed Singh Bokaria HUF'];
 const CATEGORIES = ['Equity','Debt','PMS','AIF','EQ-Debt Tax','Debt-Others','Hybrid'];
 
 async function fetchStockPrice(symbol){
@@ -4880,7 +4870,7 @@ function parseMFStatement(text, fileName){
 
   // ── Generic investor name (case-insensitive, handles ALL-CAPS PDFs) ──
   const genericInvestor = t.match(/(?:Client|Investor|Name)\s*(?:Name)?\s*[:\s]\s*([A-Z][A-Za-z]+\s+Bokaria(?:\s+HUF)?)/i) ||
-    t.match(/((?:Piyush|Babita|Rohan|Kavya)\s+Bokaria(?:\s+HUF)?)/i) ||
+    t.match(/((?:Umed\s+Singh|Sushila)\s+Bokaria(?:\s+HUF)?)/i) ||
     t.match(/((?:PIYUSH|BABITA|ROHAN|KAVYA)\s+BOKARIA(?:\s+HUF)?)/i);
 
   // ── Date extraction ──
@@ -5053,11 +5043,11 @@ function matchInvestorName(raw){
   const sorted = [...MEMBERS].sort((a,b)=>b.length-a.length);
   for(const m of sorted){ if(r.includes(m.toLowerCase())) return m; }
   // partial match
-  if(r.includes('piyush') && r.includes('huf')) return 'Piyush Bokaria HUF';
-  if(r.includes('piyush'))  return 'Piyush Bokaria';
-  if(r.includes('babita'))  return 'Babita Bokaria';
-  if(r.includes('rohan'))   return 'Rohan Bokaria';
-  if(r.includes('kavya'))   return 'Kavya Bokaria';
+  if(r.includes('umed') && r.includes('huf')) return 'Umed Singh Bokaria HUF';
+  if(r.includes('umed'))    return 'Umed Singh Bokaria';
+  if(r.includes('sushila')) return 'Sushila Bokaria';
+  if(r.includes('usb') && r.includes('huf')) return 'Umed Singh Bokaria HUF';
+  if(r.includes('usb'))     return 'Umed Singh Bokaria';
   return raw.trim();
 }
 
