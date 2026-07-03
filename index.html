@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- build: 2026-07-03T18:18:39Z -->
+  <!-- build: 2026-07-03T18:27:09Z -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Umed Singh Bokaria Family Portfolio</title>
@@ -1659,7 +1659,22 @@ async function writePortfolioSnapshot(){
       ];
     });
 
-    const allRows = [...mfRows, ...nyseRows];
+    const abRows = (abData||[]).map(h=>{
+      const gainPct = h.invested>0 ? ((h.pnl/h.invested)*100).toFixed(2)+'%' : '—';
+      return [
+        ts, h.investor,
+        h.instrument||'', h.instrument||'',
+        'AB Equity', 'Equity',
+        String(h.userId||''),
+        (h.invested||0).toFixed(2), (h.currentValue||0).toFixed(2),
+        (h.pnl||0).toFixed(2), gainPct,
+        '—',
+        (h.ltp||0).toFixed(4), h.asOf||'',
+        '', '', h.instrument||'', 'INR', '',
+        String(h.qty||0)            // col T: shares (= units for AB equity)
+      ];
+    });
+    const allRows = [...mfRows, ...abRows, ...nyseRows];
 
     // Headers
     const headers = [
