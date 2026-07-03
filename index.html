@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- build: 2026-07-03T17:05:28Z -->
+  <!-- build: 2026-07-03T18:11:52Z -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Umed Singh Bokaria Family Portfolio</title>
@@ -2395,8 +2395,9 @@ function renderAIResponse(result, userInput){
     if(result.options && result.options.length){
       html += `<div class="ai-options">` +
         result.options.map((opt,i)=>
-          `<button class="ai-option-btn" onclick="sendAIMessage(${JSON.stringify(opt)})">${opt}</button>`
+          `<button class="ai-option-btn" onclick="sendAIOption(${i})">${opt}</button>`
         ).join('') + `</div>`;
+      if(!window._aiOptions) window._aiOptions={}; window._aiOptions._last=result.options;
     }
     appendAIMsg('ai', html);
     return;
@@ -2418,9 +2419,10 @@ function renderAIResponse(result, userInput){
       <div class="ai-confirm-label">⚠ Confirm this change</div>
       <div class="ai-confirm-detail">${result.action_preview}</div>
       <div class="ai-confirm-actions">
-        <button class="ai-confirm-btn ok" onclick="executeAIAction(${JSON.stringify(JSON.stringify(result))}, this.closest('.ai-confirm-card'))">Confirm</button>
+        <button class="ai-confirm-btn ok" onclick="executeAIAction(this.dataset.ck, this.closest('.ai-confirm-card'))">Confirm</button>
         <button class="ai-confirm-btn cancel" onclick="this.closest('.ai-confirm-card').remove();appendAIMsg('ai','Cancelled.')">Cancel</button>
       </div>`;
+    if(!window._aiConfirms) window._aiConfirms={}; const _ck='ac_'+Date.now(); window._aiConfirms[_ck]=result; card.querySelector('.ai-confirm-btn.ok').dataset.ck=_ck;
     thread.appendChild(card);
     thread.scrollTop = thread.scrollHeight;
   } else {
@@ -2429,9 +2431,12 @@ function renderAIResponse(result, userInput){
 }
 
 // ── Execute confirmed action ──────────────────────────────────────────────────
-async function executeAIAction(resultStr, cardEl){
-  const result = JSON.parse(resultStr);
-  if(cardEl) cardEl.remove();
+function sendAIOption(i){ sendAIMessage((window._aiOptions?._last||[])[i]||''); }
+
+async function executeAIAction(ck, cardEl){
+  const result=(window._aiConfirms&&ck)?window._aiConfirms[ck]:null;
+  if(!result){ appendAIMsg('error','⚠ Action data not found.'); return; }
+  if(cardEl){ const ok=cardEl.querySelector('.ai-confirm-btn.ok'); const cn=cardEl.querySelector('.ai-confirm-btn.cancel'); if(ok){ok.disabled=true;ok.textContent='Saving…';} if(cn)cn.disabled=true; }
 
   const intent = result.intent;
 
@@ -2462,7 +2467,8 @@ async function executeAIAction(resultStr, cardEl){
     });
     renderAll();
     writePortfolioSnapshot();
-    appendAIMsg('ai', `✓ Updated <strong>${h.originalName||h.fund}</strong> (${shortName(h.investor)}) to <strong>${fmtCr(result.new_value)}</strong>.`);
+    if(cardEl) cardEl.remove();
+    appendAIMsg('ai', `<span style="color:var(--green)">✓</span> Updated <strong>${h.originalName||h.fund}</strong> (${shortName(h.investor)}) to <strong style="color:var(--green)">${fmtCr(result.new_value)}</strong>.`);
     return;
   }
 
@@ -2822,25 +2828,34 @@ function renderAIDiffCard(diff, fileName, extractionNotes){
       <span class="ai-diff-status" id="diffApplyStatus">Uncheck any rows you want to skip, then click Apply.</span>
       <div style="display:flex;gap:8px">
         <button class="ai-diff-cancel-btn" onclick="this.closest('.ai-diff-card').remove();appendAIMsg('ai','Cancelled — no changes made.')">Cancel</button>
-        <button class="ai-diff-apply-btn" onclick="applyAIDiff(this.closest('.ai-diff-card'),${JSON.stringify(JSON.stringify(diff))})">Apply Selected</button>
+        <button class="ai-diff-apply-btn" onclick="applyAIDiff(this.closest('.ai-diff-card'))">Apply Selected</button>
       </div>
     </div>`;
 
+  if(!window._aiDiffs) window._aiDiffs={}; const _dk='ad_'+Date.now(); window._aiDiffs[_dk]=diff; card.dataset.diffKey=_dk;
   thread.appendChild(card);
   thread.scrollTop = thread.scrollHeight;
 }
 
 // ── Apply confirmed changes ────────────────────────────────────────────────────
-async function applyAIDiff(cardEl, diffStr){
-  const diff = JSON.parse(diffStr);
-  const statusEl = cardEl.querySelector('#diffApplyStatus');
-  const applyBtn = cardEl.querySelector('.ai-diff-apply-btn');
-  applyBtn.disabled = true;
-
+async function applyAIDiff(cardEl){
+  const dk=cardEl.dataset.diffKey;
+  const diff=(window._aiDiffs&&dk)?window._aiDiffs[dk]:null;
+  if(!diff){ appendAIMsg('error','⚠ Diff data not found.'); return; }
+  const statusEl=cardEl.querySelector('#diffApplyStatus');
+  const applyBtn=cardEl.querySelector('.ai-diff-apply-btn');
+  const cancelBtn=cardEl.querySelector('.ai-diff-cancel-btn');
+  applyBtn.disabled=true; if(cancelBtn) cancelBtn.disabled=true;
+  const progWrap=document.createElement('div');
+  progWrap.style.cssText='height:3px;background:var(--border2,#2a2a2a);border-radius:3px;margin-bottom:8px;overflow:hidden;';
+  const progFill=document.createElement('div');
+  progFill.style.cssText='height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width 0.3s ease;';
+  progWrap.appendChild(progFill); cardEl.prepend(progWrap);
   if(!sheetsConnected){
-    statusEl.style.color = 'var(--red)';
-    statusEl.textContent = '⚠ Sheets not connected — connect Sheets first, then apply.';
-    applyBtn.disabled = false;
+    progFill.style.background='var(--red)'; progFill.style.width='100%';
+    statusEl.style.color='var(--red)';
+    statusEl.textContent='⚠ Sheets not connected — connect Sheets first, then apply.';
+    applyBtn.disabled=false; if(cancelBtn) cancelBtn.disabled=false;
     return;
   }
 
@@ -2953,9 +2968,8 @@ async function applyAIDiff(cardEl, diffStr){
         ${errors.map(e => `<div style="font-size:11px;color:var(--red);margin-top:2px">⚠ ${e}</div>`).join('')}
       </div>`;
   } else {
-    applyRow.innerHTML = `<div style="color:var(--green);font-size:12px;font-weight:600;width:100%">
-      ✓ Done — ${applied} change${applied!==1?'s':''} applied${skipped ? `, ${skipped} skipped` : ''}.
-    </div>`;
+    progFill.style.width='100%'; progFill.style.background='var(--green)'; setTimeout(()=>progWrap.remove(),500);
+    applyRow.innerHTML=`<div style="color:var(--green);font-size:13px;font-weight:600;width:100%;display:flex;align-items:center;gap:6px"><span style="font-size:16px">✓</span> Done — ${applied} change${applied!==1?'s':''} saved${skipped?`, ${skipped} skipped`:''}.</div>`;
   }
 }
 
