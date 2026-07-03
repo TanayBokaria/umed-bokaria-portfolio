@@ -1570,7 +1570,8 @@ async function writePortfolioSnapshot(){
         days+'d',
         h.schemeCode||'',
         'INR',
-        ''  // USD value blank for MF/PMS/AIF
+        '',  // USD value blank for MF/PMS/AIF
+        h.units ? h.units.toFixed(4) : '0'  // Units (col T) — needed for HQ NAV refresh
       ];
     });
 
@@ -1611,7 +1612,7 @@ async function writePortfolioSnapshot(){
       'As Of','Investor','Original Name','Current Name','Type','Category',
       'Folio / Platform','Invested (₹)','Current Value (₹)','Gain/Loss (₹)',
       'Return %','CAGR','NAV / Price','NAV Date','Purchase Date','Holding Period',
-      'Scheme Code / Ticker','Currency','USD Value'
+      'Scheme Code / Ticker','Currency','USD Value','Units'
     ];
 
     // Clear the sheet and rewrite
