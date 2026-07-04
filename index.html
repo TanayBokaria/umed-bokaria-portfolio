@@ -2566,7 +2566,7 @@ function renderTableData(td){
   const cellClass = v => isPos(v)?'pos':isNeg(v)?'neg':isNum(v)?'num':'';
   const ths = td.headers.map(h=>'<th>'+h+'</th>').join('');
   const trs = td.rows.map(row=>{
-    const cells = row.map(c=>{const cls=cellClass(String(c||''));return '<td'+(cls?' class="'+cls+'"':'>')+(c??'')+'</td>';}).join('');
+    const cells = row.map(c=>{const cls=cellClass(String(c||''));return '<td'+(cls?' class="'+cls+'"':'')+'>'+String(c??'')+'</td>';}).join('');
     return '<tr>'+cells+'</tr>';
   }).join('');
   return '<div class="ai-table-wrap"><table class="ai-table"><thead><tr>'+ths+'</tr></thead><tbody>'+trs+'</tbody></table></div>';
