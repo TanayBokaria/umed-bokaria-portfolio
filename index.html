@@ -2740,7 +2740,7 @@ async function executeAIAction(ck, cardEl){
     const newDate=String(result.new_soa_date||'');
     h.soaDate=newDate; h.navDate=newDate;
     if(sheetsConnected)writePortfolioSnapshot();
-    logError('ai_p3_write',intent,{investor:h.investor,fund:h.fund,detail:`SOA date: ${oldDate} → ${newDate}`});
+    logError('ai_p3_write',intent,{investor:h.investor,fund:h.originalName||h.fund,detail:`SOA date: ${oldDate} → ${newDate}`});
     renderAll();
     if(cardEl)cardEl.remove();
     appendAIMsg('ai',`<span style="color:var(--green)">✓</span> Updated SOA date for <strong>${h.originalName||h.fund}</strong> (${shortName(h.investor)}) from <strong>${oldDate}</strong> to <strong style="color:var(--green)">${newDate}</strong>.`);
@@ -2754,7 +2754,7 @@ async function executeAIAction(ck, cardEl){
       return fundOk&&(!result.investor||x.investor===result.investor);
     });
     if(!h){if(cardEl)cardEl.remove();appendAIMsg('error','⚠ Could not find this holding.');return;}
-    const oldName=h.currentName||h.fund||'';
+    const oldName=h.currentName||h.originalName||h.fund||'';
     const newName=String(result.new_display_name||'');
     h.currentName=newName; h.fund=newName;
     if(sheetsConnected)writePortfolioSnapshot();
@@ -2783,11 +2783,11 @@ async function executeAIAction(ck, cardEl){
             const ck=this.dataset.ck;
             const res=(window._aiConfirms&&ck)?window._aiConfirms[ck]:null;
             if(!res){appendAIMsg('error','⚠ Action data lost.');return;}
-            const h=portfolioData.find(x=>{const fn=res.fund_match||'';const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||fn.toLowerCase().includes((x.fund||'').toLowerCase().slice(0,20)));return fundOk&&(!res.investor||x.investor===res.investor);});
+            const h=portfolioData.find(x=>{const fn=res.fund_match||'';const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||fn.toLowerCase().includes((x.fund||'').toLowerCase().slice(0,20))||(x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)));return fundOk&&(!res.investor||x.investor===res.investor);});
             if(!h){appendAIMsg('error','⚠ Holding not found.');return;}
             const label=h.originalName||h.fund;
             const inv=h.investor;
-            portfolioData.splice(portfolioData.indexOf(h),1);
+            const _delIdx=portfolioData.indexOf(h);if(_delIdx>=0)portfolioData.splice(_delIdx,1);
             if(sheetsConnected)writePortfolioSnapshot();
             logError('ai_p3_delete','delete_holding',{investor:inv,fund:label,detail:'Deleted via AI bar type-to-confirm'});
             renderAll();
