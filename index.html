@@ -2358,14 +2358,20 @@ function buildAIContext(){
     if(!isNaN(n) && n>1000 && n<100000) return new Date((n-25569)*86400*1000);
     const d = new Date(v); return isNaN(d) ? null : d;
   };
-  const investors = [...new Set(portfolioData.map(h=>h.investor))];
+  const investors = [...new Set([
+    ...portfolioData.map(h=>h.investor),
+    ...(typeof nyseData!=='undefined'?nyseData.map(h=>h.investor):[]),
+    ...(typeof abData!=='undefined'?abData.map(h=>h.investor):[])
+  ].filter(Boolean))];
+
+  // ── MF / PMS / AIF ───────────────────────────────────────────────────────────
   const holdings = portfolioData.map(h=>{
     const gain = (h.currentValue||0) - (h.invested||0);
     const returnPct = h.invested>0 ? ((gain/h.invested)*100).toFixed(1)+'%' : '—';
-    // Staleness: for PMS/AIF use soaDate, for MF/AB use navDate
     const dateForStaleness = (h.type==='PMS'||h.type==='AIF') ? (h.soaDate||h.navDate) : h.navDate;
     const _ds = _parseDate(dateForStaleness);
     const stalenessDays = _ds ? Math.floor((_aiToday - _ds)/86400000) : null;
+    const _fmtV = v => { const n=parseFloat(v)||0; return n>=100000?'₹'+(n/1e7).toFixed(2)+'Cr':'₹'+(n/1e5).toFixed(2)+'L'; };
     return {
       id:           h.id,
       investor:     h.investor,
@@ -2374,9 +2380,9 @@ function buildAIContext(){
       category:     h.category || '',
       folio:        String(h.folio || ''),
       schemeCode:   String(h.schemeCode || ''),
-      invested:     h.invested,
-      currentValue: h.currentValue,
-      gain:         Math.round(gain),
+      invested:     _fmtV(h.invested),
+      currentValue: _fmtV(h.currentValue),
+      gain:         _fmtV(gain),
       returnPct:    returnPct,
       units:        h.units || null,
       navDate:      _fmtDate(h.navDate || ''),
@@ -2385,6 +2391,58 @@ function buildAIContext(){
       stalenessDays: stalenessDays,
     };
   });
+
+  // ── NYSE / US Stocks ─────────────────────────────────────────────────────────
+  const USD_INR = 95.33;
+  if(typeof nyseData !== 'undefined'){
+    nyseData.forEach(h=>{
+      const liveUSD = h.liveValue || (h.qty||0)*(h.livePrice||h.currentNav||h.unitCost||0);
+      const costUSD  = (h.qty||0)*(h.unitCost||0);
+      const curINR   = liveUSD * USD_INR;
+      const costINR  = costUSD * USD_INR;
+      const gainINR  = curINR - costINR;
+      const retPct   = costINR>0 ? ((gainINR/costINR)*100).toFixed(1)+'%' : '—';
+      const _fmtV = v => { const n=parseFloat(v)||0; return n>=100000?'₹'+(n/1e7).toFixed(2)+'Cr':'₹'+(n/1e5).toFixed(2)+'L'; };
+      holdings.push({
+        investor:     h.investor,
+        fund:         h.fund || h.symbol,
+        type:         'NYSE',
+        category:     'International Equity',
+        folio:        h.folio || '—',
+        schemeCode:   h.symbol || '',
+        invested:     _fmtV(costINR)+` ($${Math.round(costUSD)})`,
+        currentValue: _fmtV(curINR)+` ($${Math.round(liveUSD)})`,
+        gain:         _fmtV(gainINR),
+        returnPct:    retPct,
+        units:        h.qty || null,
+        navDate:      h.navDate || '—',
+      });
+    });
+  }
+
+  // ── AB Equity (Aditya Birla direct stocks) ───────────────────────────────────
+  if(typeof abData !== 'undefined' && abData.length>0){
+    abData.forEach(h=>{
+      const gain = (h.currentValue||0)-(h.invested||0);
+      const retPct = h.invested>0?((gain/h.invested)*100).toFixed(1)+'%':'—';
+      const _fmtV = v => { const n=parseFloat(v)||0; return n>=100000?'₹'+(n/1e7).toFixed(2)+'Cr':'₹'+(n/1e5).toFixed(2)+'L'; };
+      holdings.push({
+        investor:     h.investor,
+        fund:         h.instrument || h.fund,
+        type:         'AB Equity',
+        category:     'Direct Equity',
+        folio:        '—',
+        schemeCode:   '—',
+        invested:     _fmtV(h.invested),
+        currentValue: _fmtV(h.currentValue),
+        gain:         _fmtV(gain),
+        returnPct:    retPct,
+        units:        h.qty || null,
+        navDate:      h.asOf || '—',
+      });
+    });
+  }
+
   // Scheme code failures from last NAV refresh
   const failedCodes = (navFetchFailed||[]).map(code=>{
     const h = portfolioData.find(p=>String(p.schemeCode)===String(code));
@@ -2408,6 +2466,11 @@ PORTFOLIO (${DASHBOARD_NAME} family — ${ctx.holdings.length} holdings):
 ${JSON.stringify(ctx.holdings, null, 2)}
 
 INVESTORS: ${ctx.investors.join(', ')}${failedSection}
+
+IMPORTANT FORMATTING NOTES:
+- All monetary values above are PRE-FORMATTED as ₹X.XXCr or ₹X.XXL — use them directly.
+- NYSE holdings show BOTH ₹ and $ values (e.g. "₹4.18Cr ($43,800)") — use $ when asked for USD.
+- To query holdings that FAILED to update NAV: look for stalenessDays > 90 OR check SCHEME CODE FAILURES section at bottom.
 
 RULES:
 1. Return ONLY raw JSON — no markdown, no code blocks, no preamble.
