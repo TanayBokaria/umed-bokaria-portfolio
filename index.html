@@ -2429,7 +2429,9 @@ RULES:
   "new_scheme_code": string_or_null,
   "new_folio": string_or_null,
   "new_purchase_date": string_or_null,
-  "new_category": string_or_null
+  "new_category": string_or_null,
+  "new_soa_date": string_or_null,
+  "new_display_name": string_or_null
 }
 
 TABLE_DATA RULES — use table_data whenever the answer is a list or comparison:
@@ -2449,7 +2451,13 @@ PHASE 2 — METADATA CORRECTION INTENTS (is_read_only=false, all require confirm
 - update_invested: user wants to change the invested/cost amount. Populate new_value (number, rupees). action_preview: "Update invested amount for [Fund] ([Investor]): ₹[old] → ₹[new_value]"
 - update_category: user wants to change asset category. Populate new_category (string). Valid: Equity, Debt, Hybrid, Sectoral/Thematic, International, Liquid, Gold, Other. action_preview: "Update category for [Fund] ([Investor]): [old category] → [new_category]"
 For ALL Phase 2 intents: set requires_clarification=true if the specific holding is ambiguous (2+ matches) or the new value is unclear.
-3. intent values: update_value | add_asset | fix_scheme_code | update_folio | update_purchase_date | update_invested | update_category | query | switch_fund | delete_holding | briefing | clarify | out_of_scope
+
+PHASE 3 — STRUCTURAL WRITE INTENTS (higher confirmation bar):
+- update_pms_soa_date: user wants to set/update the SOA (Statement of Account) date for a PMS or AIF holding. Only valid for type=PMS or type=AIF. Populate new_soa_date (string, keep user's exact format). action_preview: "Update SOA date for [Fund] ([Investor]): [old soaDate or 'no date'] → [new_soa_date]"
+- update_current_name: user wants to rename/change the display name of a holding. Populate new_display_name (string). action_preview: "Rename [Fund] ([Investor]): [old name] → [new_display_name]". Use requires_clarification=true to confirm the exact new name if any ambiguity exists.
+- delete_holding: user wants to remove a holding permanently. THIS IS IRREVERSIBLE. Always set requires_clarification=true with a warning. action_preview: "PERMANENTLY DELETE [Fund] ([Investor]) from portfolio". In response_text, warn that this cannot be undone and user must type a confirmation phrase in the UI.
+For delete_holding: confidence must be "high" and both investor and fund_match must be set. If any ambiguity, clarify first.
+3. intent values: update_value | add_asset | update_value | add_asset | fix_scheme_code | update_folio | update_purchase_date | update_invested | update_category | update_pms_soa_date | update_current_name | delete_holding | query | switch_fund | briefing | clarify | out_of_scope
 4. confidence values: high | medium | low
 5. Set requires_clarification=true if: 2+ holdings match, investor ambiguous, amount unit unclear, or any destructive action. For "delete/remove ALL/EVERY" (bulk operations): use intent="out_of_scope" with response_text explaining bulk deletes are not supported — individual delete (Phase 3) requires specific fund + investor.
 6. MANDATORY: If an investor name is NOT explicitly present in the message word-for-word, ALWAYS set requires_clarification=true and ask which investor. No exceptions.
@@ -2496,7 +2504,7 @@ async function callGeminiAI(userInput){
 
   // ── Code-level safety gate ────────────────────────────────────────────────
   // Write intent + null investor → force clarification (never silently assign)
-  const writeIntents = new Set(['update_value','delete_holding','switch_fund','add_asset','fix_scheme_code','update_folio','update_purchase_date','update_invested','update_category']);
+  const writeIntents = new Set(['update_value','delete_holding','switch_fund','add_asset','fix_scheme_code','update_folio','update_purchase_date','update_invested','update_category','update_pms_soa_date','update_current_name']);
   if(writeIntents.has(result.intent) && !result.investor && !result.requires_clarification){
     result.requires_clarification = true;
     result.clarification_question = result.clarification_question ||
@@ -2699,7 +2707,89 @@ async function executeAIAction(ck, cardEl){
     return;
   }
 
-  // Other intents (delete, switch) — surface for now
+  // Phase 3 — structural writes
+  if(intent==='update_pms_soa_date'){
+    const h=portfolioData.find(x=>{
+      const fn=result.fund_match||'';
+      const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||fn.toLowerCase().includes((x.fund||'').toLowerCase().slice(0,20))||(x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)));
+      const invOk=!result.investor||x.investor===result.investor;
+      const typeOk=x.type==='PMS'||x.type==='AIF';
+      return fundOk&&invOk&&typeOk;
+    });
+    if(!h){if(cardEl)cardEl.remove();appendAIMsg('error','⚠ Could not find a PMS/AIF holding matching that description.');return;}
+    const oldDate=h.soaDate||h.navDate||'—';
+    const newDate=String(result.new_soa_date||'');
+    h.soaDate=newDate; h.navDate=newDate;
+    if(sheetsConnected)writePortfolioSnapshot();
+    logError('ai_p3_write',intent,{investor:h.investor,fund:h.fund,detail:`SOA date: ${oldDate} → ${newDate}`});
+    renderAll();
+    if(cardEl)cardEl.remove();
+    appendAIMsg('ai',`<span style="color:var(--green)">✓</span> Updated SOA date for <strong>${h.originalName||h.fund}</strong> (${shortName(h.investor)}) from <strong>${oldDate}</strong> to <strong style="color:var(--green)">${newDate}</strong>.`);
+    return;
+  }
+
+  if(intent==='update_current_name'){
+    const h=portfolioData.find(x=>{
+      const fn=result.fund_match||'';
+      const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||fn.toLowerCase().includes((x.fund||'').toLowerCase().slice(0,20))||(x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)));
+      return fundOk&&(!result.investor||x.investor===result.investor);
+    });
+    if(!h){if(cardEl)cardEl.remove();appendAIMsg('error','⚠ Could not find this holding.');return;}
+    const oldName=h.currentName||h.fund||'';
+    const newName=String(result.new_display_name||'');
+    h.currentName=newName; h.fund=newName;
+    if(sheetsConnected)writePortfolioSnapshot();
+    logError('ai_p3_write',intent,{investor:h.investor,fund:oldName,detail:`Name: ${oldName} → ${newName}`});
+    renderAll();
+    if(cardEl)cardEl.remove();
+    appendAIMsg('ai',`<span style="color:var(--green)">✓</span> Renamed <strong>${oldName}</strong> (${shortName(h.investor)}) to <strong style="color:var(--green)">${newName}</strong>.`);
+    return;
+  }
+
+  if(intent==='delete_holding'){
+    // Type-to-confirm gate — replace confirm card with a text-input gate
+    if(cardEl){
+      const fundLabel=(result.fund_match||'holding').split(' ').slice(0,4).join(' ').toUpperCase();
+      const required=`DELETE ${fundLabel}`;
+      cardEl.innerHTML=`
+        <div class="ai-confirm-label" style="color:var(--red)">⛔ IRREVERSIBLE — Permanent Delete</div>
+        <div class="ai-confirm-detail">${result.action_preview||'Delete this holding permanently?'}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Type exactly to confirm: <strong style="color:var(--red);font-family:monospace">${required}</strong></div>
+        <input id="_deleteConfirmInput" type="text" placeholder="${required}" style="width:100%;background:var(--surface);border:1px solid var(--red);border-radius:5px;padding:5px 8px;font-size:12px;color:var(--text);margin-bottom:8px" />
+        <div class="ai-confirm-actions">
+          <button class="ai-confirm-btn ok" id="_deleteConfirmBtn" disabled onclick="
+            const inp=document.getElementById('_deleteConfirmInput');
+            if(inp.value.trim().toUpperCase()!=='${required}'){return;}
+            this.disabled=true;this.textContent='Deleting…';
+            const ck=this.dataset.ck;
+            const res=(window._aiConfirms&&ck)?window._aiConfirms[ck]:null;
+            if(!res){appendAIMsg('error','⚠ Action data lost.');return;}
+            const h=portfolioData.find(x=>{const fn=res.fund_match||'';const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||fn.toLowerCase().includes((x.fund||'').toLowerCase().slice(0,20)));return fundOk&&(!res.investor||x.investor===res.investor);});
+            if(!h){appendAIMsg('error','⚠ Holding not found.');return;}
+            const label=h.originalName||h.fund;
+            const inv=h.investor;
+            portfolioData.splice(portfolioData.indexOf(h),1);
+            if(sheetsConnected)writePortfolioSnapshot();
+            logError('ai_p3_delete','delete_holding',{investor:inv,fund:label,detail:'Deleted via AI bar type-to-confirm'});
+            renderAll();
+            this.closest('.ai-confirm-card')?.remove();
+            appendAIMsg('ai','<span style=\'color:var(--green)\'>✓</span> Permanently deleted <strong>'+label+'</strong> ('+shortName(inv)+') from the portfolio.');
+          ">Delete</button>
+          <button class="ai-confirm-btn cancel" onclick="this.closest('.ai-confirm-card')?.remove();appendAIMsg('ai','Cancelled — no changes made.')">Cancel</button>
+        </div>`;
+      // Enable delete button only when correct phrase is typed
+      const inp=cardEl.querySelector('#_deleteConfirmInput');
+      const btn=cardEl.querySelector('#_deleteConfirmBtn');
+      btn.dataset.ck=Object.keys(window._aiConfirms||{}).pop()||'';
+      inp?.addEventListener('input',()=>{
+        btn.disabled=inp.value.trim().toUpperCase()!==required;
+        btn.style.opacity=inp.value.trim().toUpperCase()===required?'1':'0.4';
+      });
+    }
+    return;
+  }
+
+  // Other intents — surface for now
   appendAIMsg('ai', `This action type (${intent}) requires manual execution for safety. Use the dashboard controls directly.`);
 }
 
