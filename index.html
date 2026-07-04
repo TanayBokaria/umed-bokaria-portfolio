@@ -2431,7 +2431,8 @@ RULES:
   "new_purchase_date": string_or_null,
   "new_category": string_or_null,
   "new_soa_date": string_or_null,
-  "new_display_name": string_or_null
+  "new_display_name": string_or_null,
+  "ui_action": string_or_null
 }
 
 TABLE_DATA RULES — use table_data whenever the answer is a list or comparison:
@@ -2457,7 +2458,18 @@ PHASE 3 — STRUCTURAL WRITE INTENTS (higher confirmation bar):
 - update_current_name: user wants to rename/change the display name of a holding. Populate new_display_name (string). action_preview: "Rename [Fund] ([Investor]): [old name] → [new_display_name]". Use requires_clarification=true to confirm the exact new name if any ambiguity exists.
 - delete_holding: user wants to remove a holding permanently. THIS IS IRREVERSIBLE. Always set requires_clarification=true with a warning. action_preview: "PERMANENTLY DELETE [Fund] ([Investor]) from portfolio". In response_text, warn that this cannot be undone and user must type a confirmation phrase in the UI.
 For delete_holding: confidence must be "high" and both investor and fund_match must be set. If any ambiguity, clarify first.
-3. intent values: update_value | add_asset | update_value | add_asset | fix_scheme_code | update_folio | update_purchase_date | update_invested | update_category | update_pms_soa_date | update_current_name | delete_holding | query | switch_fund | briefing | clarify | out_of_scope
+
+PHASE 4 — UI NAVIGATION (is_read_only=true, no confirm card, no Sheets write):
+Set intent="navigate" and populate ui_action with one of these exact strings:
+- "filter_investor" + investor field: user says "show [name]'s holdings", "filter to Babita" → filters the holdings table to that investor
+- "filter_all": user says "show all holdings", "clear filter", "show everyone" → resets table filter
+- "open_slnum_manager": user says "open Sl# Manager", "set serial numbers", "Sl# modal" → opens the Sl# Manager modal
+- "open_add_fund": user says "add a fund", "new holding", "add fund" → opens Add Fund modal
+- "refresh_navs": user says "refresh NAVs", "update prices", "fetch latest NAVs" → triggers NAV refresh
+- "show_data_freshness": user says "show data freshness", "which NAVs are stale", "data freshness" → opens data freshness detail
+response_text should be a short confirmation, e.g. "Filtering to Babita Bokaria's holdings." or "Opening the Sl# Manager."
+Set ui_action: null for all non-navigate intents.
+3. intent values: update_value | add_asset | update_value | add_asset | fix_scheme_code | update_folio | update_purchase_date | update_invested | update_category | update_pms_soa_date | update_current_name | delete_holding | navigate | query | switch_fund | briefing | clarify | out_of_scope
 4. confidence values: high | medium | low
 5. Set requires_clarification=true if: 2+ holdings match, investor ambiguous, amount unit unclear, or any destructive action. For "delete/remove ALL/EVERY" (bulk operations): use intent="out_of_scope" with response_text explaining bulk deletes are not supported — individual delete (Phase 3) requires specific fund + investor.
 6. MANDATORY: If an investor name is NOT explicitly present in the message word-for-word, ALWAYS set requires_clarification=true and ask which investor. No exceptions.
@@ -2786,6 +2798,33 @@ async function executeAIAction(ck, cardEl){
         btn.style.opacity=inp.value.trim().toUpperCase()===required?'1':'0.4';
       });
     }
+    return;
+  }
+
+  if(intent==='navigate'){
+    const action = result.ui_action||'';
+    let msg = result.response_text||'Done.';
+    if(action==='filter_investor' && result.investor){
+      filterTable(result.investor, null);
+      msg = result.response_text||`Filtered to ${result.investor}.`;
+    } else if(action==='filter_all'){
+      filterTable('all', null);
+      msg = result.response_text||'Showing all holdings.';
+    } else if(action==='open_slnum_manager'){
+      openModal('slNumModal');
+      msg = result.response_text||'Sl# Manager opened.';
+    } else if(action==='open_add_fund'){
+      openModal('addFundModal');
+      msg = result.response_text||'Add Fund dialog opened.';
+    } else if(action==='refresh_navs'){
+      document.getElementById('refreshBtn')?.click();
+      msg = result.response_text||'NAV refresh started.';
+    } else if(action==='show_data_freshness'){
+      showFreshDetail?.();
+      msg = result.response_text||'Opening data freshness panel.';
+    }
+    if(cardEl) cardEl.remove();
+    appendAIMsg('ai', msg);
     return;
   }
 
