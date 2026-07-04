@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- build: 2026-07-04T04:15:51Z -->
+  <!-- build: 2026-07-04T09:43:29Z -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Umed Singh Bokaria Family Portfolio</title>
@@ -3341,6 +3341,7 @@ async function connectSheets(){
       updateSheetsPill('connected','Sheets: Connected'); _pfHandleSheetsConnect();
       renderAll();
       startAutoSync(); // begin background sync now that Sheets is connected
+      _updateDataFreshnessFromSnapshot(); // show snapshot coverage immediately on connect
     }
   }).requestAccessToken();
 }
@@ -6903,18 +6904,8 @@ async function _runAutoSync(){
     await loadFromSheets();        // restores NAV values from snapshot silently
     renderAll();                   // refreshes all cards, charts, table
     _autoSyncLastRun = new Date();
-    // Update the Data Freshness status line to reflect the silent sync
-    const el = document.getElementById('sheetsSyncStatus');
-    if(el){
-      const timeStr = _autoSyncLastRun.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-      // Append (or replace) the auto-sync note without wiping other status
-      const current = el.innerHTML;
-      const withoutPrev = current.replace(/\s*·\s*<span[^>]*data-autosync[^>]*>.*?<\/span>/,'');
-      el.innerHTML = withoutPrev +
-        (withoutPrev ? ' &nbsp;·&nbsp; ' : '') +
-        `<span data-autosync style="color:var(--text-dim);font-size:11px">` +
-        `Auto-synced ${timeStr}</span>`;
-    }
+    _updateDataFreshnessFromSnapshot();
+  }
   } catch(e){
     console.warn('Auto-sync failed:', e.message);
   } finally {
