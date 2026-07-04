@@ -2413,7 +2413,11 @@ RULES:
   "action_preview": string_or_null,
   "response_text": string,
   "is_read_only": boolean,
-  "table_data": { "headers": string[], "rows": string[][] } | null
+  "table_data": { "headers": string[], "rows": string[][] } | null,
+  "new_scheme_code": string_or_null,
+  "new_folio": string_or_null,
+  "new_purchase_date": string_or_null,
+  "new_category": string_or_null
 }
 
 TABLE_DATA RULES — use table_data whenever the answer is a list or comparison:
@@ -2424,7 +2428,15 @@ TABLE_DATA RULES — use table_data whenever the answer is a list or comparison:
 - Mark positive returns with + prefix (e.g. +42.3%), negative with − prefix
 - Keep response_text to 1 brief sentence when table_data is present
 - Set table_data: null for simple one-liner answers
-3. intent values: update_value | add_asset | query | switch_fund | delete_holding | briefing | clarify | out_of_scope
+
+PHASE 2 — METADATA CORRECTION INTENTS (is_read_only=false, all require confirm card):
+- fix_scheme_code: user wants to fix/correct a scheme code number. Populate new_scheme_code (string). action_preview: "Fix scheme code for [Fund] ([Investor]): [old schemeCode] → [new_scheme_code]". Requires_clarification=true unless the new code is explicitly stated as a number.
+- update_folio: user wants to change a folio number. Populate new_folio (string). action_preview: "Update folio for [Fund] ([Investor]): [old folio] → [new_folio]"
+- update_purchase_date: user wants to change a purchase/start date. Populate new_purchase_date (string, keep user's exact format). action_preview: "Update purchase date for [Fund] ([Investor]): [old purchaseDate] → [new_purchase_date]"
+- update_invested: user wants to change the invested/cost amount. Populate new_value (number, rupees). action_preview: "Update invested amount for [Fund] ([Investor]): ₹[old] → ₹[new_value]"
+- update_category: user wants to change asset category. Populate new_category (string). Valid: Equity, Debt, Hybrid, Sectoral/Thematic, International, Liquid, Gold, Other. action_preview: "Update category for [Fund] ([Investor]): [old category] → [new_category]"
+For ALL Phase 2 intents: set requires_clarification=true if the specific holding is ambiguous (2+ matches) or the new value is unclear.
+3. intent values: update_value | add_asset | fix_scheme_code | update_folio | update_purchase_date | update_invested | update_category | query | switch_fund | delete_holding | briefing | clarify | out_of_scope
 4. confidence values: high | medium | low
 5. Set requires_clarification=true if: 2+ holdings match, investor ambiguous, amount unit unclear, "all/every/delete/remove" present, or any destructive action
 6. MANDATORY: If an investor name is NOT explicitly present in the message word-for-word, ALWAYS set requires_clarification=true and ask which investor. No exceptions.
@@ -2605,6 +2617,50 @@ async function executeAIAction(ck, cardEl){
     writePortfolioSnapshot();
     if(cardEl) cardEl.remove();
     appendAIMsg('ai', `<span style="color:var(--green)">✓</span> Updated <strong>${h.originalName||h.fund}</strong> (${shortName(h.investor)}) to <strong style="color:var(--green)">${fmtCr(result.new_value)}</strong>.`);
+    return;
+  }
+
+  // Phase 2 — metadata field writes
+  const _P2_INTENTS = ['fix_scheme_code','update_folio','update_purchase_date','update_invested','update_category'];
+  if(_P2_INTENTS.includes(intent)){
+    const h = portfolioData.find(x=>{
+      const fn = result.fund_match||'';
+      const fundOk = fn && (
+        (x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)) ||
+        fn.toLowerCase().includes((x.fund||'').toLowerCase().slice(0,20)) ||
+        (x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))
+      );
+      const invOk  = !result.investor || x.investor===result.investor;
+      const folioOk= !result.folio   || String(x.folio)===String(result.folio);
+      return fundOk&&invOk&&folioOk;
+    });
+    if(!h){
+      if(cardEl) cardEl.remove();
+      appendAIMsg('error','⚠ Could not find this holding. Try with the exact fund name or folio number.');
+      return;
+    }
+    const _p2Labels={fix_scheme_code:'scheme code',update_folio:'folio',update_purchase_date:'purchase date',update_invested:'invested amount',update_category:'category'};
+    const oldVal={
+      fix_scheme_code:   h.schemeCode,
+      update_folio:      h.folio,
+      update_purchase_date:h.purchaseDate,
+      update_invested:   fmtCr(h.invested),
+      update_category:   h.category,
+    }[intent];
+    const newRaw = result.new_scheme_code||result.new_folio||result.new_purchase_date||result.new_category||result.new_value;
+    // Apply in memory
+    if(intent==='fix_scheme_code')     h.schemeCode   =String(result.new_scheme_code||'');
+    if(intent==='update_folio')        h.folio        =String(result.new_folio||'');
+    if(intent==='update_purchase_date')h.purchaseDate =String(result.new_purchase_date||'');
+    if(intent==='update_invested')     h.invested     =result.new_value||0;
+    if(intent==='update_category')     h.category     =String(result.new_category||'');
+    // Persist
+    if(sheetsConnected) writePortfolioSnapshot();
+    logError('ai_metadata_write', intent, {investor:h.investor, fund:h.fund, detail:`${oldVal} → ${newRaw}`});
+    renderAll();
+    if(cardEl) cardEl.remove();
+    const newDisplay = intent==='update_invested' ? fmtCr(result.new_value) : String(newRaw);
+    appendAIMsg('ai',`<span style="color:var(--green)">✓</span> Updated <strong>${h.originalName||h.fund}</strong> (${shortName(h.investor)}) — ${_p2Labels[intent]} changed from <strong>${oldVal||'—'}</strong> to <strong style="color:var(--green)">${newDisplay}</strong>.`);
     return;
   }
 
