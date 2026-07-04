@@ -2451,7 +2451,7 @@ PHASE 2 — METADATA CORRECTION INTENTS (is_read_only=false, all require confirm
 For ALL Phase 2 intents: set requires_clarification=true if the specific holding is ambiguous (2+ matches) or the new value is unclear.
 3. intent values: update_value | add_asset | fix_scheme_code | update_folio | update_purchase_date | update_invested | update_category | query | switch_fund | delete_holding | briefing | clarify | out_of_scope
 4. confidence values: high | medium | low
-5. Set requires_clarification=true if: 2+ holdings match, investor ambiguous, amount unit unclear, "all/every/delete/remove" present, or any destructive action
+5. Set requires_clarification=true if: 2+ holdings match, investor ambiguous, amount unit unclear, or any destructive action. For "delete/remove ALL/EVERY" (bulk operations): use intent="out_of_scope" with response_text explaining bulk deletes are not supported — individual delete (Phase 3) requires specific fund + investor.
 6. MANDATORY: If an investor name is NOT explicitly present in the message word-for-word, ALWAYS set requires_clarification=true and ask which investor. No exceptions.
 7. NEVER invent fund names or investors not listed above
 8. Indian amounts: 1 lakh=100000, 1 crore=10000000, 1L=100000, 1Cr=10000000
