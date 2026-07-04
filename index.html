@@ -2428,6 +2428,7 @@ TABLE_DATA RULES — use table_data whenever the answer is a list or comparison:
 - Mark positive returns with + prefix (e.g. +42.3%), negative with − prefix
 - Keep response_text to 1 brief sentence when table_data is present
 - Set table_data: null for simple one-liner answers
+- IMPORTANT: If the full dataset would exceed 30 rows (e.g. all AB equity positions across all families, all MF holdings), return a SUMMARY table instead (e.g. Family | Investor | Positions | Total Value) and add a note in response_text saying "For individual positions, open the family dashboard." Never generate table_data with more than 30 rows.
 
 PHASE 2 — METADATA CORRECTION INTENTS (is_read_only=false, all require confirm card):
 - fix_scheme_code: user wants to fix/correct a scheme code number. Populate new_scheme_code (string). action_preview: "Fix scheme code for [Fund] ([Investor]): [old schemeCode] → [new_scheme_code]". Requires_clarification=true unless the new code is explicitly stated as a number.
