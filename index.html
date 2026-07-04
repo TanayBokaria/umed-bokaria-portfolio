@@ -2469,6 +2469,13 @@ Set intent="navigate" and populate ui_action with one of these exact strings:
 - "show_data_freshness": user says "show data freshness", "which NAVs are stale", "data freshness" → opens data freshness detail
 response_text should be a short confirmation, e.g. "Filtering to Babita Bokaria's holdings." or "Opening the Sl# Manager."
 Set ui_action: null for all non-navigate intents.
+
+PHASE 5 — FILE WORKFLOW GUIDANCE:
+- "import my AB file" / "open AB import" / "AB import" (no file attached) → intent=navigate, ui_action="scroll_to_ab_import"
+- "upload SOA" / "process statement" / "open SOA" (no file attached) → intent=navigate, ui_action="trigger_soa_upload"
+- If user has already attached a file, the dashboard handles it automatically — no special intent needed.
+- Tell user that attaching a PDF to the paperclip icon and sending will auto-extract SOA holdings.
+- Tell user that attaching an AB XLS/CSV and sending will auto-trigger the AB import review.
 3. intent values: update_value | add_asset | update_value | add_asset | fix_scheme_code | update_folio | update_purchase_date | update_invested | update_category | update_pms_soa_date | update_current_name | delete_holding | navigate | query | switch_fund | briefing | clarify | out_of_scope
 4. confidence values: high | medium | low
 5. Set requires_clarification=true if: 2+ holdings match, investor ambiguous, amount unit unclear, or any destructive action. For "delete/remove ALL/EVERY" (bulk operations): use intent="out_of_scope" with response_text explaining bulk deletes are not supported — individual delete (Phase 3) requires specific fund + investor.
@@ -2822,6 +2829,14 @@ async function executeAIAction(ck, cardEl){
     } else if(action==='show_data_freshness'){
       showFreshDetail?.();
       msg = result.response_text||'Opening data freshness panel.';
+    } else if(action==='scroll_to_ab_import'){
+      const abBtn = document.getElementById('abFileInput')?.closest('button') ||
+        [...document.querySelectorAll('button')].find(b=>b.title?.toLowerCase().includes('aditya birla'));
+      if(abBtn){abBtn.scrollIntoView({behavior:'smooth',block:'center'});abBtn.style.outline='2px solid var(--accent)';setTimeout(()=>{abBtn.style.outline=''},2500);}
+      msg = result.response_text||'Scrolled to AB Import button — click it to select your XLS/CSV file.';
+    } else if(action==='trigger_soa_upload'){
+      document.getElementById('soaFileInput')?.click();
+      msg = result.response_text||'File picker opened — select your SOA PDF.';
     }
     if(cardEl) cardEl.remove();
     appendAIMsg('ai', msg);
@@ -3381,6 +3396,30 @@ sendAIMessage = async function(prefillText){
     try{
       // Read all files and process one by one
       for(const file of filesSnapshot){
+        // ── Detect AB equity file (portfolio holdings XLS/CSV from Aditya Birla) ──
+        const _isABFile = /portfolioholdings|ab.?holding|aditya.?birla/i.test(file.name) ||
+          (/\.(csv|xls|xlsx)$/i.test(file.name) && /import.{0,10}ab|ab.{0,10}import|aditya/i.test((userText||'').toLowerCase()));
+        if(_isABFile){
+          if(thinkingEl) thinkingEl.querySelector('.ai-bubble').innerHTML =
+            `<div class="ai-thinking">Parsing AB file <strong>${file.name}</strong>…<div class="ai-thinking-dots"><span></span><span></span><span></span></div></div>`;
+          let abRows;
+          try{
+            abRows = await parseABFile(file);
+          }catch(abErr){
+            appendAIMsg('error', `⚠ <strong>${file.name}</strong> — ${abErr.message}`);
+            logError('ai_ab_import', abErr, {detail: file.name});
+            continue;
+          }
+          if(!abRows || abRows.length === 0){
+            appendAIMsg('ai', `📎 <strong>${file.name}</strong> — No AB holdings found. Make sure this is an Aditya Birla portfolio export (XLS or CSV).`);
+            continue;
+          }
+          showABReviewModal(abRows);
+          const abInv = [...new Set(abRows.map(r=>r.investor||'Unknown'))].join(', ');
+          appendAIMsg('ai', `<span style="color:var(--green)">✓</span> Parsed <strong>${abRows.length} AB equity positions</strong> from <strong>${file.name}</strong> for: ${abInv}.<br><span style="font-size:11px;color:var(--text-muted)">Review the import modal above, then click <strong>Import to Dashboard</strong> to save.</span>`);
+          continue;
+        }
+        // ── SOA / fund statement — existing extraction flow ──────────────────────
         if(thinkingEl) thinkingEl.querySelector('.ai-bubble').innerHTML =
           `<div class="ai-thinking">Reading <strong>${file.name}</strong>…<div class="ai-thinking-dots"><span></span><span></span><span></span></div></div>`;
 
