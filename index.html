@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- build: 2026-07-04T09:58:58Z -->
+  <!-- build: 2026-07-03T17:05:09Z -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Umed Singh Bokaria Family Portfolio</title>
@@ -2326,30 +2326,58 @@ function generateAIBriefing(){
 
 // ── Build compact portfolio JSON for Gemini context ───────────────────────────
 function buildAIContext(){
+  const _aiToday = new Date();
   const investors = [...new Set(portfolioData.map(h=>h.investor))];
-  const holdings = portfolioData.map(h=>({
-    id: h.id,
-    investor: h.investor,
-    fund: h.originalName || h.fund,
-    type: h.type,
-    folio: h.folio || '',
-    invested: h.invested,
-    currentValue: h.currentValue,
-    soaDate: h.soaDate || h.navDate || ''
-  }));
-  return {investors, holdings};
+  const holdings = portfolioData.map(h=>{
+    const gain = (h.currentValue||0) - (h.invested||0);
+    const returnPct = h.invested>0 ? ((gain/h.invested)*100).toFixed(1)+'%' : '—';
+    // Staleness: for PMS/AIF use soaDate, for MF/AB use navDate
+    const dateForStaleness = (h.type==='PMS'||h.type==='AIF') ? (h.soaDate||h.navDate) : h.navDate;
+    const stalenessDays = dateForStaleness
+      ? Math.floor((_aiToday - new Date(dateForStaleness))/86400000)
+      : null;
+    return {
+      id:           h.id,
+      investor:     h.investor,
+      fund:         h.originalName || h.fund,
+      type:         h.type,
+      category:     h.category || '',
+      folio:        String(h.folio || ''),
+      schemeCode:   String(h.schemeCode || ''),
+      invested:     h.invested,
+      currentValue: h.currentValue,
+      gain:         Math.round(gain),
+      returnPct:    returnPct,
+      units:        h.units || null,
+      navDate:      h.navDate || '',
+      purchaseDate: h.purchaseDate || '',
+      soaDate:      h.soaDate || '',
+      stalenessDays: stalenessDays,
+    };
+  });
+  // Scheme code failures from last NAV refresh
+  const failedCodes = (navFetchFailed||[]).map(code=>{
+    const h = portfolioData.find(p=>String(p.schemeCode)===String(code));
+    return h ? `${code} (${h.fund})` : String(code);
+  });
+  return {investors, holdings, failedCodes};
 }
 
 // ── System prompt (validated against 40-case test suite) ─────────────────────
 function buildAISystemPrompt(){
   const ctx = buildAIContext();
+  const failedSection = ctx.failedCodes.length > 0
+    ? `\n\nSCHEME CODE FAILURES (last NAV refresh — ${ctx.failedCodes.length} fund(s) could not update NAV):\n${ctx.failedCodes.join('\n')}`
+    : '';
   return `You are an AI assistant embedded in the Bokaria family investment portfolio dashboard.
 Help Priya (the family accounts manager) understand and manage the portfolio.
+
+Each holding includes: id, investor, fund name, type (MF/PMS/AIF/NYSE/AB Equity), category, folio, schemeCode, invested amount, currentValue, gain, returnPct, units, navDate (last NAV/price date), purchaseDate, soaDate (PMS/AIF statement date), stalenessDays (days since last data update).
 
 PORTFOLIO (${DASHBOARD_NAME} family — ${ctx.holdings.length} holdings):
 ${JSON.stringify(ctx.holdings, null, 2)}
 
-INVESTORS: ${ctx.investors.join(', ')}
+INVESTORS: ${ctx.investors.join(', ')}${failedSection}
 
 RULES:
 1. Return ONLY raw JSON — no markdown, no code blocks, no preamble.
