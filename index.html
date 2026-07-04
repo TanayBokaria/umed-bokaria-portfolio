@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- build: 2026-07-04T03:52:40Z -->
+  <!-- build: 2026-07-04T04:02:59Z -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Umed Singh Bokaria Family Portfolio</title>
@@ -4493,7 +4493,7 @@ async function applyCodeEdit(){
 // ─── Show detail popup of failed/renamed funds ───
 function closeFreshDetail(){
   const p=document.getElementById('freshDetailPanel');
-  if(p)p.remove();
+  if(p){ p.style.opacity='0'; p.style.transition='opacity 0.15s'; setTimeout(()=>p.remove(),150); }
 }
 function showFreshDetail(){
   // Show fresh detail panel below the Data Freshness card
@@ -4502,7 +4502,7 @@ function showFreshDetail(){
 
   const panel = document.createElement('div');
   panel.id = 'freshDetailPanel';
-  panel.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin:0 40px 20px;max-width:1600px';
+  panel.style.cssText = 'position:fixed;inset:0;background:rgba(13,15,20,0.87);backdrop-filter:blur(6px);z-index:9998;display:flex;align-items:center;justify-content:center;';
 
   let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
     + '<div style="font-size:13px;font-weight:600">Data Freshness Detail</div>'
@@ -4551,16 +4551,17 @@ function showFreshDetail(){
     html += '<div style="font-size:12px;color:var(--green);text-align:center;padding:12px">✓ All scheme codes fetched successfully. No issues found.</div>';
   }
 
-  panel.innerHTML = html;
+  // Close on overlay click
+  panel.addEventListener('click', e => { if(e.target===panel) { panel.remove(); } });
 
-  // Insert after the summary grid
-  const main = document.querySelector('main.main') || document.querySelector('main');
-  const summaryGrid = document.querySelector('.summary-grid');
-  if(summaryGrid && summaryGrid.nextSibling){
-    main.insertBefore(panel, summaryGrid.nextSibling);
-  } else if(main){
-    main.prepend(panel);
-  }
+  panel.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;
+      padding:24px;width:640px;max-width:94vw;max-height:80vh;overflow-y:auto;
+      box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+      ${html}
+    </div>`;
+
+  document.body.appendChild(panel);
 }
 
 // ═══════════════════════════════════
