@@ -2465,7 +2465,7 @@ async function callGeminiAI(userInput){
     body: JSON.stringify({
       system_instruction:{parts:[{text:sysPrompt}]},
       contents: messages,
-      generationConfig:{temperature:0, maxOutputTokens:3500, responseMimeType:'application/json'}
+      generationConfig:{temperature:0, maxOutputTokens:3500, responseMimeType:'application/json', thinkingConfig:{thinkingBudget:0}}
     })
   });
   if(!res.ok){
