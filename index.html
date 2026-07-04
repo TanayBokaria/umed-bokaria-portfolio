@@ -2689,7 +2689,7 @@ async function executeAIAction(ck, cardEl){
       const fn = result.fund_match||'';
       const fundOk = fn && (
         (x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)) ||
-        fn.toLowerCase().includes((x.fund||'').toLowerCase().slice(0,20)) ||
+        (x.fund&&fn.toLowerCase().includes(x.fund.toLowerCase().slice(0,20))) ||
         (x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))
       );
       const invOk  = !result.investor || x.investor===result.investor;
@@ -2730,7 +2730,7 @@ async function executeAIAction(ck, cardEl){
   if(intent==='update_pms_soa_date'){
     const h=portfolioData.find(x=>{
       const fn=result.fund_match||'';
-      const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||fn.toLowerCase().includes((x.fund||'').toLowerCase().slice(0,20))||(x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)));
+      const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||(x.fund&&fn.toLowerCase().includes(x.fund.toLowerCase().slice(0,20)))||(x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)));
       const invOk=!result.investor||x.investor===result.investor;
       const typeOk=x.type==='PMS'||x.type==='AIF';
       return fundOk&&invOk&&typeOk;
@@ -2750,7 +2750,7 @@ async function executeAIAction(ck, cardEl){
   if(intent==='update_current_name'){
     const h=portfolioData.find(x=>{
       const fn=result.fund_match||'';
-      const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||fn.toLowerCase().includes((x.fund||'').toLowerCase().slice(0,20))||(x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)));
+      const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||(x.fund&&fn.toLowerCase().includes(x.fund.toLowerCase().slice(0,20)))||(x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)));
       return fundOk&&(!result.investor||x.investor===result.investor);
     });
     if(!h){if(cardEl)cardEl.remove();appendAIMsg('error','⚠ Could not find this holding.');return;}
@@ -2783,7 +2783,7 @@ async function executeAIAction(ck, cardEl){
             const ck=this.dataset.ck;
             const res=(window._aiConfirms&&ck)?window._aiConfirms[ck]:null;
             if(!res){appendAIMsg('error','⚠ Action data lost.');return;}
-            const h=portfolioData.find(x=>{const fn=res.fund_match||'';const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||fn.toLowerCase().includes((x.fund||'').toLowerCase().slice(0,20))||(x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)));return fundOk&&(!res.investor||x.investor===res.investor);});
+            const h=portfolioData.find(x=>{const fn=res.fund_match||'';const fundOk=fn&&((x.fund||'').toLowerCase().includes(fn.toLowerCase().slice(0,20))||(x.fund&&fn.toLowerCase().includes(x.fund.toLowerCase().slice(0,20)))||(x.originalName||'').toLowerCase().includes(fn.toLowerCase().slice(0,20)));return fundOk&&(!res.investor||x.investor===res.investor);});
             if(!h){appendAIMsg('error','⚠ Holding not found.');return;}
             const label=h.originalName||h.fund;
             const inv=h.investor;
