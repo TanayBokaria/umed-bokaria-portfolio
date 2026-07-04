@@ -2267,7 +2267,7 @@ async function saveSlNumbers(){
 
 // ══════════════════════════════════════════════════════════════════════════════
 // AI COMMAND BAR — 2A (Clarification) + 2B (Proactive Briefing)
-// Model: gemini-3.5-flash | All writes require explicit confirmation
+// Model: gemini-2.5-flash | All writes require explicit confirmation
 // ══════════════════════════════════════════════════════════════════════════════
 
 let _aiPanelOpen   = false;
@@ -2476,7 +2476,8 @@ PHASE 5 — FILE WORKFLOW GUIDANCE:
 - If user has already attached a file, the dashboard handles it automatically — no special intent needed.
 - Tell user that attaching a PDF to the paperclip icon and sending will auto-extract SOA holdings.
 - Tell user that attaching an AB XLS/CSV and sending will auto-trigger the AB import review.
-3. intent values: update_value | add_asset | update_value | add_asset | fix_scheme_code | update_folio | update_purchase_date | update_invested | update_category | update_pms_soa_date | update_current_name | delete_holding | navigate | query | switch_fund | briefing | clarify | out_of_scope
+3. intent values: update_value | add_asset | fix_scheme_code | update_folio | update_purchase_date | update_invested | update_category | update_pms_soa_date | update_current_name | delete_holding | navigate | fetch_then_answer | query | switch_fund | briefing | clarify | out_of_scope
+- fetch_then_answer: user asks for "latest", "live", "current", "real-time", or "today's" values for MF NAVs or NYSE prices. Set fetch_scope="mf" for MF NAVs, "nyse" for US stocks, "all" for both. The dashboard will run a targeted refresh then re-answer. is_read_only=true.
 4. confidence values: high | medium | low
 5. Set requires_clarification=true if: 2+ holdings match, investor ambiguous, amount unit unclear, or any destructive action. For "delete/remove ALL/EVERY" (bulk operations): use intent="out_of_scope" with response_text explaining bulk deletes are not supported — individual delete (Phase 3) requires specific fund + investor.
 6. MANDATORY: If an investor name is NOT explicitly present in the message word-for-word, ALWAYS set requires_clarification=true and ask which investor. No exceptions.
@@ -2488,7 +2489,7 @@ PHASE 5 — FILE WORKFLOW GUIDANCE:
 12. Always respond in English. Keep options arrays short (max 4 items). Keep clarification_question under 150 chars.`;
 }
 
-// ── Call Gemini (gemini-3.5-flash for the command bar) ────────────────────────
+// ── Call Gemini (gemini-2.5-flash for the command bar) ────────────────────────
 async function callGeminiAI(userInput){
   const keys = await loadGeminiKeys();
   if(!keys||!keys.length) throw new Error('No Gemini API key configured.');
@@ -2498,7 +2499,7 @@ async function callGeminiAI(userInput){
   // Build multi-turn messages
   const messages = [..._aiConversation, {role:'user', parts:[{text:userInput}]}];
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${key}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
   const res = await fetchWithTimeout(url, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -2848,6 +2849,34 @@ async function executeAIAction(ck, cardEl){
 }
 
 // ── Main send function ────────────────────────────────────────────────────────
+
+// ── Inline AI progress bar (rendered in chat thread for AI-triggered refreshes) ──
+function showAIInlineProgress(label, total){
+  const thread = document.getElementById('aiThread');
+  if(!thread) return null;
+  const wrap = document.createElement('div');
+  wrap.className = 'ai-msg ai';
+  wrap.innerHTML = `<div class="ai-bubble" style="padding:10px 14px">
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">⟳ ${label}</div>
+    <div style="background:var(--surface);border-radius:4px;overflow:hidden;height:6px;width:100%;margin-bottom:6px">
+      <div id="aiProgressFill" style="height:100%;width:0%;background:var(--accent);transition:width 0.3s ease;border-radius:4px"></div>
+    </div>
+    <div id="aiProgressLbl" style="font-size:11px;color:var(--text-dim)">Starting…</div>
+  </div>`;
+  thread.appendChild(wrap);
+  thread.scrollTop = thread.scrollHeight;
+  return {
+    update(n, txt){
+      const pct = total>0?Math.round((n/total)*100):0;
+      const fill=wrap.querySelector('#aiProgressFill');
+      const lbl=wrap.querySelector('#aiProgressLbl');
+      if(fill) fill.style.width=pct+'%';
+      if(lbl)  lbl.textContent=txt||`${n}/${total}`;
+    },
+    complete(msg){ wrap.querySelector('.ai-bubble').innerHTML=`<div style="font-size:12px;color:var(--green)">✓ ${msg||'Done'}</div>`; setTimeout(()=>wrap.remove(),3000); },
+    remove(){ wrap.remove(); }
+  };
+}
 async function sendAIMessage(prefillText){
   const inputEl  = document.getElementById('aiInput');
   const sendBtn  = document.getElementById('aiSendBtn');
@@ -2867,6 +2896,44 @@ async function sendAIMessage(prefillText){
   try{
     const result = await callGeminiAI(userText);
     if(thinkingEl) thinkingEl.remove();
+
+    // ── fetch_then_answer: run a scoped refresh then re-query with fresh context ──
+    if(result.intent==='fetch_then_answer'){
+      const scope = result.fetch_scope||'mf';
+      if(result.response_text) appendAIMsg('ai', result.response_text);
+      const mfCodes = [...new Set(portfolioData.filter(h=>h.type==='MF'&&h.schemeCode).map(h=>h.schemeCode))];
+      const nyseHoldings = portfolioData.filter(h=>h.type==='NYSE');
+      const refreshTotal = scope==='mf'?mfCodes.length:scope==='nyse'?nyseHoldings.length:mfCodes.length+nyseHoldings.length;
+      const label = scope==='nyse'?'Fetching latest NYSE data':scope==='mf'?`Refreshing ${mfCodes.length} MF NAVs`:`Refreshing all NAVs`;
+      const progressCtrl = showAIInlineProgress(label, refreshTotal);
+      try{
+        if(scope==='mf'||scope==='all'){
+          // Reuse existing NAV refresh infrastructure — triggers full refresh
+          if(typeof refreshNAVs==='function'){
+            await new Promise(resolve=>{
+              let done=0;
+              const orig = window._onNavProgress;
+              window._onNavProgress=(n,tot)=>{ if(progressCtrl) progressCtrl.update(n,`${n}/${tot} NAVs fetched`); if(n>=tot){ window._onNavProgress=orig; resolve(); }};
+              refreshNAVs().then(resolve).catch(resolve);
+            });
+          }
+        }
+        if(scope==='nyse'||scope==='all'){
+          // For NYSE, re-read from Sheets (live prices come from individual dashboard sync)
+          if(typeof loadFromSheets==='function') await loadFromSheets();
+        }
+        if(progressCtrl) progressCtrl.complete('Data refreshed — answering now');
+        const freshResult = await callGeminiAI(userText);
+        renderAIResponse(freshResult, userText);
+      }catch(refreshErr){
+        if(progressCtrl) progressCtrl.remove();
+        appendAIMsg('error',`⚠ Refresh failed: ${refreshErr.message}. Showing last known values.`);
+        const fallback = await callGeminiAI(userText);
+        renderAIResponse(fallback, userText);
+      }
+      return;
+    }
+
     renderAIResponse(result, userText);
   }catch(e){
     if(thinkingEl) thinkingEl.remove();
@@ -3055,7 +3122,7 @@ If you cannot extract meaningful holdings, return:
 {"extracted_holdings":[],"confidence":"low","notes":"explain why"}`;
 
   const key  = keys[_geminiKeyIdx % keys.length];
-  const url  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${key}`;
+  const url  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
 
   // Build content parts — text, image, or direct PDF (Gemini native)
   let contentParts;
