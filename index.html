@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- build: 2026-07-03T18:49:21Z -->
+  <!-- build: 2026-07-04T03:52:40Z -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Umed Singh Bokaria Family Portfolio</title>
@@ -3324,6 +3324,7 @@ async function connectSheets(){
       closeModal('sheetsModal');
       updateSheetsPill('connected','Sheets: Connected'); _pfHandleSheetsConnect();
       renderAll();
+      startAutoSync(); // begin background sync now that Sheets is connected
     }
   }).requestAccessToken();
 }
@@ -3542,10 +3543,11 @@ async function saveToSheets(holdingId, investedToDate, value, asOfDate, updatedB
       const refreshed = await silentTokenRefresh();
       if(refreshed){
         // Retry the save with new token — recursive call
-        if(_retryCount>0){sheetsConnected=false;updateSheetsPill('error','Sheets: Session expired');return false;}
+        if(_retryCount>0){sheetsConnected=false;stopAutoSync();updateSheetsPill('error','Sheets: Session expired');return false;}
         return await saveToSheets(holdingId, investedToDate, value, asOfDate, updatedBy, notes, 1);
       }
       sheetsConnected=false;
+      stopAutoSync();
       updateSheetsPill('error','Sheets: Session expired');
       showToast('Session expired — click <strong>Sheets</strong> (top right) to reconnect.', 'warn', 'Sheets Session Expired');
       return false;
@@ -6866,6 +6868,52 @@ function showConfirm(title, body, onConfirm, {confirmText='Confirm', cancelText=
   // Close on overlay click
   overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
 }
+
+// ── Background auto-sync from Sheets ──────────────────────────────────────────
+// Silently re-reads portfolio_snapshot every 60 minutes while Sheets is connected.
+// Picks up NAV updates written by HQ Refresh All NAVs or the Apps Script
+// without requiring a manual Refresh NAVs click or page reload.
+
+let _autoSyncTimer    = null;
+let _autoSyncLastRun  = null;
+let _autoSyncRunning  = false;
+const AUTO_SYNC_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
+
+async function _runAutoSync(){
+  if(!sheetsConnected || _autoSyncRunning) return;
+  _autoSyncRunning = true;
+  try {
+    await loadFromSheets();        // restores NAV values from snapshot silently
+    renderAll();                   // refreshes all cards, charts, table
+    _autoSyncLastRun = new Date();
+    // Update the Data Freshness status line to reflect the silent sync
+    const el = document.getElementById('sheetsSyncStatus');
+    if(el){
+      const timeStr = _autoSyncLastRun.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+      // Append (or replace) the auto-sync note without wiping other status
+      const current = el.innerHTML;
+      const withoutPrev = current.replace(/\s*·\s*<span[^>]*data-autosync[^>]*>.*?<\/span>/,'');
+      el.innerHTML = withoutPrev +
+        (withoutPrev ? ' &nbsp;·&nbsp; ' : '') +
+        `<span data-autosync style="color:var(--text-dim);font-size:11px">` +
+        `Auto-synced ${timeStr}</span>`;
+    }
+  } catch(e){
+    console.warn('Auto-sync failed:', e.message);
+  } finally {
+    _autoSyncRunning = false;
+  }
+}
+
+function startAutoSync(){
+  stopAutoSync(); // clear any existing timer first
+  _autoSyncTimer = setInterval(_runAutoSync, AUTO_SYNC_INTERVAL_MS);
+}
+
+function stopAutoSync(){
+  if(_autoSyncTimer){ clearInterval(_autoSyncTimer); _autoSyncTimer = null; }
+}
+
 </script>
 </body>
 </html>
