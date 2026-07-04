@@ -2345,15 +2345,27 @@ function generateAIBriefing(){
 // ── Build compact portfolio JSON for Gemini context ───────────────────────────
 function buildAIContext(){
   const _aiToday = new Date();
+  // Convert Sheets date serial numbers to ISO strings (serials are integers ~25000-50000)
+  const _fmtDate = v => {
+    if(!v) return '';
+    const n = Number(v);
+    if(!isNaN(n) && n>1000 && n<100000) return new Date((n-25569)*86400*1000).toISOString().slice(0,10);
+    return String(v);
+  };
+  const _parseDate = v => {
+    if(!v) return null;
+    const n = Number(v);
+    if(!isNaN(n) && n>1000 && n<100000) return new Date((n-25569)*86400*1000);
+    const d = new Date(v); return isNaN(d) ? null : d;
+  };
   const investors = [...new Set(portfolioData.map(h=>h.investor))];
   const holdings = portfolioData.map(h=>{
     const gain = (h.currentValue||0) - (h.invested||0);
     const returnPct = h.invested>0 ? ((gain/h.invested)*100).toFixed(1)+'%' : '—';
     // Staleness: for PMS/AIF use soaDate, for MF/AB use navDate
     const dateForStaleness = (h.type==='PMS'||h.type==='AIF') ? (h.soaDate||h.navDate) : h.navDate;
-    const stalenessDays = dateForStaleness
-      ? Math.floor((_aiToday - new Date(dateForStaleness))/86400000)
-      : null;
+    const _ds = _parseDate(dateForStaleness);
+    const stalenessDays = _ds ? Math.floor((_aiToday - _ds)/86400000) : null;
     return {
       id:           h.id,
       investor:     h.investor,
@@ -2367,9 +2379,9 @@ function buildAIContext(){
       gain:         Math.round(gain),
       returnPct:    returnPct,
       units:        h.units || null,
-      navDate:      h.navDate || '',
-      purchaseDate: h.purchaseDate || '',
-      soaDate:      h.soaDate || '',
+      navDate:      _fmtDate(h.navDate || ''),
+      purchaseDate: _fmtDate(h.purchaseDate || ''),
+      soaDate:      _fmtDate(h.soaDate || ''),
       stalenessDays: stalenessDays,
     };
   });
