@@ -349,6 +349,24 @@
       transition:border-color 0.15s;
     }
     .ai-option-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+    /* AI response table */
+    .ai-table{width:100%;border-collapse:collapse;margin:8px 0 4px;font-size:11px;}
+    .ai-table th{
+      background:var(--surface);border-bottom:1px solid var(--accent);
+      padding:5px 9px;text-align:left;font-weight:700;color:var(--accent);
+      font-size:10px;text-transform:uppercase;letter-spacing:0.5px;
+    }
+    .ai-table td{
+      padding:5px 9px;border-bottom:1px solid var(--border);color:var(--text);
+      white-space:nowrap;
+    }
+    .ai-table tr:last-child td{border-bottom:none;}
+    .ai-table tbody tr:hover td{background:var(--surface);transition:background 0.1s;}
+    .ai-table td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--accent);}
+    .ai-table td.pos{color:#4ade80;font-weight:600;}
+    .ai-table td.neg{color:var(--red);font-weight:600;}
+    .ai-table-wrap{overflow-x:auto;margin:4px 0;}
     /* Input row */
     .ai-input-row{display:flex;gap:8px;}
     .ai-input{
@@ -2394,8 +2412,18 @@ RULES:
   "options": array_or_null,
   "action_preview": string_or_null,
   "response_text": string,
-  "is_read_only": boolean
+  "is_read_only": boolean,
+  "table_data": { "headers": string[], "rows": string[][] } | null
 }
+
+TABLE_DATA RULES — use table_data whenever the answer is a list or comparison:
+- Holdings by investor or fund → columns like Investor | Fund | Folio | Current Value | NAV Date
+- Asset class totals → Asset Class | Value | % of Portfolio
+- Any ≥3 data points that form natural rows → use table_data
+- Prefix monetary values with ₹ and use Cr/L units (e.g. ₹4.5 L, ₹1.2 Cr)
+- Mark positive returns with + prefix (e.g. +42.3%), negative with − prefix
+- Keep response_text to 1 brief sentence when table_data is present
+- Set table_data: null for simple one-liner answers
 3. intent values: update_value | add_asset | query | switch_fund | delete_holding | briefing | clarify | out_of_scope
 4. confidence values: high | medium | low
 5. Set requires_clarification=true if: 2+ holdings match, investor ambiguous, amount unit unclear, "all/every/delete/remove" present, or any destructive action
@@ -2459,6 +2487,17 @@ async function callGeminiAI(userInput){
 }
 
 // ── Render helpers ────────────────────────────────────────────────────────────
+function renderTableData(td){
+  if(!td||!td.headers||!td.rows||!td.rows.length) return '';
+  const isNum = v => /^[+\-]?[\d,]+(\.(\d+))?\s*(Cr|L|%)?$/.test((v||'').trim()) || /^[+\-]?₹/.test((v||'').trim());
+  const isPos = v => /^\+/.test((v||'').trim());
+  const isNeg = v => /^[-−]/.test((v||'').trim()) && !/^--/.test((v||'').trim());
+  const cellClass = v => isPos(v)?'pos':isNeg(v)?'neg':isNum(v)?'num':'';
+  const ths = td.headers.map(h=>`<th>${h}</th>`).join('');
+  const trs = td.rows.map(row=>`<tr>${row.map(c=>{const cls=cellClass(String(c||''));return `<td${cls?` class="${cls}"`:''}}>${c??''}</td>`;}).join('')}</tr>`).join('');
+  return `<div class="ai-table-wrap"><table class="ai-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+}
+
 function appendAIMsg(type, html){
   const thread = document.getElementById('aiThread');
   if(!thread) return;
@@ -2499,8 +2538,10 @@ function renderAIResponse(result, userInput){
   }
 
   if(result.is_read_only){
-    // Query or briefing — just show the response text
-    appendAIMsg('ai', result.response_text || 'Done.');
+    // Query or briefing — show response text + optional table
+    const tableHtml = renderTableData(result.table_data);
+    const txt = result.response_text || 'Done.';
+    appendAIMsg('ai', tableHtml ? `${txt}<br>${tableHtml}` : txt);
     return;
   }
 
