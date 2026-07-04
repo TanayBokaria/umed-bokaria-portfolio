@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- build: 2026-07-04T09:43:29Z -->
+  <!-- build: 2026-07-04T09:58:58Z -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Umed Singh Bokaria Family Portfolio</title>
@@ -2664,8 +2664,32 @@ async function readFileAsText(file){
   }
 
   if(ext === 'pdf'){
-    const pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
-    if(!pdfjsLib) throw new Error('PDF.js not available — cannot read PDF files.');
+    let pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
+
+    // Auto-recover: if inline bundle failed, try loading PDF.js from CDN
+    if(!pdfjsLib){
+      try{
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          s.crossOrigin = 'anonymous';
+          s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+        pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
+      }catch(e){ /* CDN also unavailable — use Gemini direct PDF fallback */ }
+    }
+
+    if(!pdfjsLib){
+      // Fallback: send PDF directly to Gemini as base64 — Gemini reads PDFs natively
+      return new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload  = e => res({type:'pdf', mimeType:'application/pdf', base64: e.target.result.split(',')[1], fileName: file.name});
+        r.onerror = () => rej(new Error(`Could not read ${file.name}.`));
+        r.readAsDataURL(file);
+      });
+    }
+
     if(pdfjsLib.GlobalWorkerOptions)
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const ab = await file.arrayBuffer();
@@ -2729,9 +2753,15 @@ If you cannot extract meaningful holdings, return:
   const key  = keys[_geminiKeyIdx % keys.length];
   const url  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${key}`;
 
-  // Build content parts — text or image
+  // Build content parts — text, image, or direct PDF (Gemini native)
   let contentParts;
-  if(typeof fileContent === 'object' && fileContent.type === 'image'){
+  if(typeof fileContent === 'object' && fileContent.type === 'pdf'){
+    // PDF.js was unavailable — send PDF directly to Gemini (reads layout, tables, formatting natively)
+    contentParts = [
+      { inline_data: { mime_type: 'application/pdf', data: fileContent.base64 } },
+      { text: `File: ${fileContent.fileName||fileName}\n\nUser message: ${userMessage}` }
+    ];
+  } else if(typeof fileContent === 'object' && fileContent.type === 'image'){
     contentParts = [
       { inline_data: { mime_type: fileContent.mimeType, data: fileContent.base64 } },
       { text: `File: ${fileName}\n\n${userMessage}` }
@@ -6623,13 +6653,13 @@ async function runPreflightCheck(){
   const dataldR=dataldRes.status==='fulfilled'?dataldRes.value:{ok:false,error:'Check error'};
   _pfUpdate('soa',soaR.ok?'pass':'fail',soaR.detail||soaR.error);
   _pfUpdate('ab',abR.ok?'pass':'fail',abR.detail||abR.error);
-  _pfUpdate('pdfjs',pdfjsR.ok?'pass':'fail',pdfjsR.detail||pdfjsR.error);
+  _pfUpdate('pdfjs', pdfjsR.ok===true?'pass':(pdfjsR.ok==='warn'?'warn':'fail'), pdfjsR.detail||pdfjsR.error);
   _pfUpdate('exceljs',exceljsR.ok?'pass':'fail',exceljsR.detail||exceljsR.error);
   _pfUpdate('gemini',geminiR.ok?(geminiR.warn?'warn':'pass'):'fail',geminiR.detail||geminiR.error);
   _pfUpdate('datald',dataldR.ok?'pass':'fail',dataldR.detail||dataldR.error);
   if(!soaR.ok) failures++;
   if(!abR.ok) failures++;
-  if(!pdfjsR.ok) failures++;
+  if(pdfjsR.ok===false) failures++; // 'warn' (Gemini fallback active) is not a blocking failure
   if(!exceljsR.ok) failures++;
   if(!geminiR.ok&&!geminiR.warn) failures++;
   if(!dataldR.ok) failures++;
@@ -6728,9 +6758,12 @@ async function _pfCheckABHandler(){
 
 // ── PDF.js library ────────────────────────────────────────────────────────────
 async function _pfCheckPdfJs(){
-  if(typeof pdfjsLib==='undefined') return {ok:false,error:'pdfjsLib not loaded — SOA upload will fail'};
+  if(typeof pdfjsLib==='undefined'){
+    // Gemini direct PDF fallback is available — degrade gracefully
+    return {ok:'warn', error:'PDF.js not loaded — using Gemini direct PDF fallback ✓'};
+  }
   if(typeof pdfjsLib.getDocument!=='function') return {ok:false,error:'pdfjsLib.getDocument missing'};
-  return {ok:true,detail:'PDF.js loaded and ready ✓'};
+  return {ok:true, detail:'PDF.js loaded and ready ✓'};
 }
 
 // ── ExcelJS library ───────────────────────────────────────────────────────────
