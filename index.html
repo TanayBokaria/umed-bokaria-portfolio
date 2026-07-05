@@ -1689,7 +1689,8 @@ async function writePortfolioSnapshot(){
         '',
         h.symbol,
         'INR (converted)',
-        '$'+value.toFixed(2)  // USD value
+        value.toFixed(2),      // S[18] USD value (no $ prefix — parseFloat must work in HQ)
+        String(h.qty||0)       // T[19] qty/shares — needed for HQ Refresh All NAVs
       ];
     });
 
@@ -4057,7 +4058,19 @@ async function loadFromSheets(){
               if(h){ h.livePrice=livePrice; h.liveValue=h.qty*livePrice; navRestored++; }
             }
           }
-          // PMS/AIF skipped — handled by pms_aif_values tab
+          // PMS/AIF: restore soaDate from col N so HQ-Apply dates survive subsequent Refresh NAVs
+          } else if(type==='PMS'||type==='AIF'){
+            const snapshotSoaDate=String(row[13]||'').trim();
+            if(snapshotSoaDate){
+              const folio=String(row[6]||'').trim();
+              const investor=String(row[1]||'').trim();
+              const fundName=String(row[2]||row[3]||'').trim();
+              let h=null;
+              if(folio) h=portfolioData.find(x=>(x.type==='PMS'||x.type==='AIF')&&String(x.folio||'')===folio&&x.investor===investor);
+              if(!h&&fundName) h=portfolioData.find(x=>(x.type==='PMS'||x.type==='AIF')&&(x.fund===fundName||x.originalName===fundName)&&x.investor===investor);
+              if(h && snapshotSoaDate) h.soaDate=snapshotSoaDate; // snapshot wins — written last by writePortfolioSnapshot or HQ Apply
+            }
+          }
           // Timestamp restore removed — GSheets serial ≠ JS milliseconds (causes Jan 1970 bug)
         });
       }
