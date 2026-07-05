@@ -1675,11 +1675,12 @@ async function writePortfolioSnapshot(){
           if(h.type==='PMS'||h.type==='AIF'){
             if(!h.soaDate) return '';
             const _d=parseSoaDate(h.soaDate);
-            return (_d&&!isNaN(_d)&&(Date.now()-_d.getTime())<31*86400*1000)?h.soaDate:'';
+            const _v=(_d&&!isNaN(_d)&&(Date.now()-_d.getTime())<31*86400*1000)?h.soaDate:'';
+            return _v?"'"+_v:'';
           }
-          return h.navDate||'';
+          const _nv=h.navDate||''; return _nv?"'"+_nv:'';
         })(),
-        h.purchaseDate||'',
+        h.purchaseDate?"'"+h.purchaseDate:'',
         days+'d',
         h.schemeCode||'',
         'INR',
@@ -1729,7 +1730,7 @@ async function writePortfolioSnapshot(){
         (h.invested||0).toFixed(2), (h.currentValue||0).toFixed(2),
         (h.pnl||0).toFixed(2), gainPct,
         '—',
-        (h.ltp||0).toFixed(4), h.asOf||'',
+        (h.ltp||0).toFixed(4), h.asOf?"'"+h.asOf:'',
         '', '', h.instrument||'', 'INR', '',
         String(h.qty||0)            // col T: shares (= units for AB equity)
       ];
@@ -4162,11 +4163,11 @@ async function saveToSheets(holdingId, investedToDate, value, asOfDate, updatedB
     let writeUrl, method;
     if(rowIdx>=0){
       // Update existing row
-      writeUrl=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/pms_aif_values!A${rowIdx+2}:H${rowIdx+2}?valueInputOption=USER_ENTERED`;
+      writeUrl=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/pms_aif_values!A${rowIdx+2}:H${rowIdx+2}?valueInputOption=RAW`;
       method='PUT';
     } else {
       // Append new row
-      writeUrl=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/pms_aif_values!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+      writeUrl=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/pms_aif_values!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
       method='POST';
     }
     const wr=await fetchWithTimeout(writeUrl,{method,headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({values:vals})});
@@ -4492,7 +4493,7 @@ async function saveNewHoldingToSheets(h, notes=''){
       h.soaDate||'', fmtDate(new Date()), h.schemeCode||'',
       h.originalName||h.fund, h.currentName||h.fund, notes
     ]];
-    const url=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/new_holdings!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/new_holdings!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
     const r=await fetchWithTimeout(url,{method:'POST',headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({values:vals})});
     if(!r.ok){
       const err=await r.json().catch(()=>({}));
@@ -6491,10 +6492,10 @@ async function saveSinglePMSValue(h, value, invested, date){
     const rowIdx = rows.findIndex(r=>parseInt(r[0])===h.id);
     let writeUrl, method;
     if(rowIdx>=0){
-      writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/pms_aif_values!A${rowIdx+2}:H${rowIdx+2}?valueInputOption=USER_ENTERED`;
+      writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/pms_aif_values!A${rowIdx+2}:H${rowIdx+2}?valueInputOption=RAW`;
       method = 'PUT';
     } else {
-      writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/pms_aif_values!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+      writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/pms_aif_values!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
       method = 'POST';
     }
     const wr = await fetchWithTimeout(writeUrl,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
