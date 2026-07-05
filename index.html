@@ -7020,7 +7020,7 @@ async function saveABHoldingsToSheets(rows, asOf){
       r.qty||0, r.avgPrice||0, r.invested||0, r.currentValue||0,
       r.pnl||0, r.ltp||0, asOf||r.asOf||'', r.source||''
     ]);
-    const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/ab_holdings!A1?valueInputOption=USER_ENTERED`;
+    const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/ab_holdings!A1?valueInputOption=RAW`;
     const wr = await fetchWithTimeout(writeUrl,{
       method:'PUT',
       headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
@@ -7061,7 +7061,7 @@ async function loadABHoldingsFromSheets(){
       currentValue: parseFloat(row[6])||0,
       pnl:          parseFloat(row[7])||0,
       ltp:          parseFloat(row[8])||0,
-      asOf:         row[9]||'',
+      asOf:         _ds(row[9])||'',
       source:       row[10]||'',
     })).filter(r=>r.instrument && r.qty > 0);
     const asOf = abData[0]?.asOf||'';
