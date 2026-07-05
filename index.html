@@ -4057,9 +4057,8 @@ async function loadFromSheets(){
               if(!h) h=nyseData.find(x=>x.symbol===ticker&&(!x.livePrice||x.livePrice<=0));
               if(h){ h.livePrice=livePrice; h.liveValue=h.qty*livePrice; navRestored++; }
             }
-          }
-          // PMS/AIF: restore soaDate from col N so HQ-Apply dates survive subsequent Refresh NAVs
           } else if(type==='PMS'||type==='AIF'){
+            // Restore soaDate from col N so HQ-Apply dates survive subsequent Refresh NAVs
             const snapshotSoaDate=String(row[13]||'').trim();
             if(snapshotSoaDate){
               const folio=String(row[6]||'').trim();
@@ -4068,7 +4067,7 @@ async function loadFromSheets(){
               let h=null;
               if(folio) h=portfolioData.find(x=>(x.type==='PMS'||x.type==='AIF')&&String(x.folio||'')===folio&&x.investor===investor);
               if(!h&&fundName) h=portfolioData.find(x=>(x.type==='PMS'||x.type==='AIF')&&(x.fund===fundName||x.originalName===fundName)&&x.investor===investor);
-              if(h && snapshotSoaDate) h.soaDate=snapshotSoaDate; // snapshot wins — written last by writePortfolioSnapshot or HQ Apply
+              if(h && snapshotSoaDate) h.soaDate=snapshotSoaDate;
             }
           }
           // Timestamp restore removed — GSheets serial ≠ JS milliseconds (causes Jan 1970 bug)
