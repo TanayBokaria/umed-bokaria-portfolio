@@ -2396,7 +2396,10 @@ function buildAIContext(){
   const USD_INR = 95.33;
   if(typeof nyseData !== 'undefined'){
     nyseData.forEach(h=>{
-      const liveUSD = h.liveValue || (h.qty||0)*(h.livePrice||h.currentNav||h.unitCost||0);
+      // liveValue = live total USD; if not available, fall back to cost basis (qty*unitCost)
+      // so AI sees the approximate value rather than $0
+            // liveValue=live total; if absent, fall back to cost basis (qty*unitCost) so AI sees ~value not $0
+      const liveUSD = h.liveValue || (h.qty||0)*(h.livePrice||h.currentNav||0) || (h.qty||0)*(h.unitCost||0);
       const costUSD  = (h.qty||0)*(h.unitCost||0);
       const curINR   = liveUSD * USD_INR;
       const costINR  = costUSD * USD_INR;
@@ -3907,12 +3910,15 @@ async function loadFromSheets(){
     // Load PMS/AIF value updates
     const url=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/pms_aif_values!A2:H500`;
     const r=await fetchWithTimeout(url,{headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`}});
+    let rows=[];
     if(!r.ok){
-      if(r.status===401){updateSheetsPill('error','Sheets: Session expired');sheetsConnected=false;}
-      return;
+      if(r.status===401){updateSheetsPill('error','Sheets: Session expired');sheetsConnected=false;return;}
+      // Non-401: tab may not exist yet (first use) — continue with empty rows, don't abort
+      console.warn('pms_aif_values read failed:', r.status, '— continuing with empty rows');
+    } else {
+      const data=await r.json();
+      rows=data.values||[];
     }
-    const data=await r.json();
-    const rows=data.values||[];
     let synced=0;
     rows.forEach(row=>{
       if(!row||row.length<5) return;
@@ -3946,7 +3952,7 @@ async function loadFromSheets(){
     });
 
     // Load new holdings added via the app — read full 18 columns A:R
-    const nhUrl=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/new_holdings!A2:R1000`;
+    const nhUrl=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/new_holdings!A2:T1000`;
     const nhR=await fetchWithTimeout(nhUrl,{headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`}});
     if(nhR.ok){
       const nhData=await nhR.json();
@@ -3977,7 +3983,7 @@ async function loadFromSheets(){
     // Restore last NAV snapshot for MF holdings (so page reload shows saved values, not hardcoded baseline)
     let navRestored = 0;
     try{
-      const snapUrl=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/portfolio_snapshot!A2:Q5000?valueRenderOption=UNFORMATTED_VALUE`;
+      const snapUrl=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/portfolio_snapshot!A2:T5000?valueRenderOption=UNFORMATTED_VALUE`;
       const snapR=await fetchWithTimeout(snapUrl,{headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`}});
       if(snapR.ok){
         const snapData=await snapR.json();
