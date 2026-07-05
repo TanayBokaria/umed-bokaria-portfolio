@@ -2267,7 +2267,7 @@ async function saveSlNumbers(){
 
 // ══════════════════════════════════════════════════════════════════════════════
 // AI COMMAND BAR — 2A (Clarification) + 2B (Proactive Briefing)
-// Model: gemini-2.5-flash | All writes require explicit confirmation
+// Model: gemini-3.5-flash | All writes require explicit confirmation
 // ══════════════════════════════════════════════════════════════════════════════
 
 let _aiPanelOpen   = false;
@@ -2556,7 +2556,7 @@ PHASE 5 — FILE WORKFLOW GUIDANCE:
 12. Always respond in English. Keep options arrays short (max 4 items). Keep clarification_question under 150 chars.`;
 }
 
-// ── Call Gemini (gemini-2.5-flash for the command bar) ────────────────────────
+// ── Call Gemini (gemini-3.5-flash for the command bar) ────────────────────────
 async function callGeminiAI(userInput){
   const keys = await loadGeminiKeys();
   if(!keys||!keys.length) throw new Error('No Gemini API key configured.');
@@ -2566,14 +2566,14 @@ async function callGeminiAI(userInput){
   // Build multi-turn messages
   const messages = [..._aiConversation, {role:'user', parts:[{text:userInput}]}];
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${key}`;
   const res = await fetchWithTimeout(url, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       system_instruction:{parts:[{text:sysPrompt}]},
       contents: messages,
-      generationConfig:{temperature:0, maxOutputTokens:4500, responseMimeType:'application/json', thinkingConfig:{thinkingBudget:0}}
+      generationConfig:{temperature:0, maxOutputTokens:4500, responseMimeType:'application/json', thinkingConfig:{thinkingLevel:'minimal'}}
     })
   });
   if(!res.ok){
@@ -3194,7 +3194,7 @@ If you cannot extract meaningful holdings, return:
 {"extracted_holdings":[],"confidence":"low","notes":"explain why"}`;
 
   const key  = keys[_geminiKeyIdx % keys.length];
-  const url  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+  const url  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key}`;
 
   // Build content parts — text, image, or direct PDF (Gemini native)
   let contentParts;
@@ -5375,7 +5375,7 @@ Rules:
     const geminiKey = geminiKeys[idx];
     try{
       const res = await fetchWithTimeout(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`,
         {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
