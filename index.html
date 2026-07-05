@@ -4059,7 +4059,14 @@ async function loadFromSheets(){
             }
           } else if(type==='PMS'||type==='AIF'){
             // Restore soaDate from col N so HQ-Apply dates survive subsequent Refresh NAVs
-            const snapshotSoaDate=String(row[13]||'').trim();
+            // UNFORMATTED_VALUE returns date serials as numbers — convert to YYYY-MM-DD
+            const _col13=row[13];
+            let snapshotSoaDate='';
+            if(typeof _col13==='number'&&!isNaN(_col13)&&_col13>30000&&_col13<80000){
+              snapshotSoaDate=new Date((_col13-25569)*86400*1000).toISOString().slice(0,10);
+            } else {
+              snapshotSoaDate=String(_col13||'').trim();
+            }
             if(snapshotSoaDate){
               const folio=String(row[6]||'').trim();
               const investor=String(row[1]||'').trim();
@@ -7471,5 +7478,4 @@ function stopAutoSync(){
 
 </script>
 </body>
-<!-- deploy-trigger-1 -->
 </html>
