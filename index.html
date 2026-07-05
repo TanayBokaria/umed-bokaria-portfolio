@@ -2599,9 +2599,12 @@ async function callGeminiAI(userInput){
   }
 
   // Update conversation history (keep last 6 turns)
+  // Store only response_text in history (not full JSON) to prevent token accumulation
+  // Full JSON responses can be 1-4KB each; 12 messages = ~30KB of conversation overhead
+  const _convSummary = result.response_text || result.clarification_question || '';
   _aiConversation.push({role:'user', parts:[{text:userInput}]});
-  _aiConversation.push({role:'model', parts:[{text:JSON.stringify(result)}]});
-  if(_aiConversation.length > 12) _aiConversation = _aiConversation.slice(-12);
+  _aiConversation.push({role:'model', parts:[{text:_convSummary}]});
+  if(_aiConversation.length > 8) _aiConversation = _aiConversation.slice(-8); // 4 turns max
 
   return result;
 }
