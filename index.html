@@ -3979,7 +3979,11 @@ async function loadFromSheets(){
       const fundRaw= String(row[1]||'').trim();
       const invRaw = String(row[3]||'').trim().replace(/,/g,'');
       const valRaw = String(row[4]||'').trim().replace(/,/g,'');
-      const dateRaw= String(row[5]||'').trim();
+      // Handle date serials — Sheets returns UNFORMATTED_VALUE as number (e.g. 46206 = 2026-07-03)
+      const _rawDate5=row[5];
+      const dateRaw=typeof _rawDate5==='number'&&!isNaN(_rawDate5)&&_rawDate5>30000&&_rawDate5<80000
+        ? new Date((_rawDate5-25569)*86400*1000).toISOString().slice(0,10)
+        : String(_rawDate5||'').trim();
 
       let h = null;
       if(!isNaN(idNum) && idNum>0){
