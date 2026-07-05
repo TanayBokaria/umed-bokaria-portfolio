@@ -2498,7 +2498,8 @@ RULES:
   "new_category": string_or_null,
   "new_soa_date": string_or_null,
   "new_display_name": string_or_null,
-  "ui_action": string_or_null
+  "ui_action": string_or_null,
+  "fetch_scope": "mf"|"nyse"|"all"|null
 }
 
 TABLE_DATA RULES — use table_data whenever the answer is a list or comparison:
@@ -2572,7 +2573,7 @@ async function callGeminiAI(userInput){
     body: JSON.stringify({
       system_instruction:{parts:[{text:sysPrompt}]},
       contents: messages,
-      generationConfig:{temperature:0, maxOutputTokens:3500, responseMimeType:'application/json', thinkingConfig:{thinkingBudget:0}}
+      generationConfig:{temperature:0, maxOutputTokens:4500, responseMimeType:'application/json', thinkingConfig:{thinkingBudget:0}}
     })
   });
   if(!res.ok){
@@ -2687,6 +2688,11 @@ function renderAIResponse(result, userInput){
   }
 
   // Write action — show confirmation card
+  if(!result.action_preview){
+    // Write intent without action_preview — surface error so Priya can retry
+    appendAIMsg('ai', result.response_text || 'I need more detail to confirm this action. Could you be more specific about which holding and what value?');
+    return;
+  }
   if(result.action_preview){
     const thread = document.getElementById('aiThread');
     if(!thread) return;
@@ -2968,7 +2974,7 @@ async function sendAIMessage(prefillText){
       const scope = result.fetch_scope||'mf';
       if(result.response_text) appendAIMsg('ai', result.response_text);
       const mfCodes = [...new Set(portfolioData.filter(h=>h.type==='MF'&&h.schemeCode).map(h=>h.schemeCode))];
-      const nyseHoldings = portfolioData.filter(h=>h.type==='NYSE');
+      const nyseHoldings = (typeof nyseData!=='undefined' ? nyseData : portfolioData.filter(h=>h.type==='NYSE'));
       const refreshTotal = scope==='mf'?mfCodes.length:scope==='nyse'?nyseHoldings.length:mfCodes.length+nyseHoldings.length;
       const label = scope==='nyse'?'Fetching latest NYSE data':scope==='mf'?`Refreshing ${mfCodes.length} MF NAVs`:`Refreshing all NAVs`;
       const progressCtrl = showAIInlineProgress(label, refreshTotal);
@@ -3217,7 +3223,7 @@ If you cannot extract meaningful holdings, return:
     body: JSON.stringify({
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: contentParts }],
-      generationConfig: { temperature: 0, maxOutputTokens: 3000, responseMimeType: 'application/json' }
+      generationConfig: { temperature: 0, maxOutputTokens: 4000, responseMimeType: 'application/json', thinkingConfig:{thinkingBudget:0} }
     })
   });
 
@@ -5369,7 +5375,7 @@ Rules:
     const geminiKey = geminiKeys[idx];
     try{
       const res = await fetchWithTimeout(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
         {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
