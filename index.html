@@ -2451,7 +2451,31 @@ function buildAIContext(){
     const h = portfolioData.find(p=>String(p.schemeCode)===String(code));
     return h ? `${code} (${h.fund})` : String(code);
   });
-  return {investors, holdings, failedCodes};
+  // ── Pre-computed totals so AI never needs to aggregate from raw data ──
+  // NYSE values in holdings use "₹X.XXCr ($XXXXX)" format which the model can
+  // misparse when summing — these totals are authoritative.
+  const _investorTotals = {};
+  const _typeTotals = {};
+  holdings.forEach(h => {
+    const inv = h.investor || 'Unknown';
+    // Parse value: handle "₹X.XXCr", "₹X.XXL", or "₹X.XXCr ($XXXXX)" formats
+    const rawVal = (h.currentValue || '0').split('(')[0].trim(); // strip ($USD) part
+    const num = parseFloat(rawVal.replace(/[₹CrL,\s]/g,'')) || 0;
+    const mult = rawVal.includes('Cr') ? 1e7 : rawVal.includes('L') ? 1e5 : 1;
+    const inrVal = num * mult;
+    _investorTotals[inv] = (_investorTotals[inv] || 0) + inrVal;
+    const t = h.type || 'MF';
+    _typeTotals[t] = (_typeTotals[t] || 0) + inrVal;
+  });
+  const fmtCrCtx = v => v >= 1e7 ? '₹'+(v/1e7).toFixed(2)+'Cr' : '₹'+(v/1e5).toFixed(2)+'L';
+  const investorTotalsStr = Object.entries(_investorTotals)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([inv,v])=>`${inv}: ${fmtCrCtx(v)} total`).join('; ');
+  const typeTotalsStr = Object.entries(_typeTotals)
+    .map(([t,v])=>`${t}: ${fmtCrCtx(v)}`).join('; ');
+  const grandTotal = fmtCrCtx(Object.values(_investorTotals).reduce((s,v)=>s+v,0));
+
+  return {investors, holdings, failedCodes, investorTotals: investorTotalsStr, typeTotals: typeTotalsStr, grandTotal};
 }
 
 // ── System prompt (validated against 40-case test suite) ─────────────────────
@@ -2464,6 +2488,11 @@ function buildAISystemPrompt(){
 Help Priya (the family accounts manager) understand and manage the portfolio.
 
 Each holding includes: id, investor, fund name, type (MF/PMS/AIF/NYSE/AB Equity), category, folio, schemeCode, invested amount, currentValue, gain, returnPct, units, navDate (last NAV/price date), purchaseDate, soaDate (PMS/AIF statement date), stalenessDays (days since last data update).
+
+PORTFOLIO TOTALS (pre-computed — use these for aggregation queries, do NOT re-sum from raw data):
+Grand total: ${ctx.grandTotal}
+By investor: ${ctx.investorTotals}
+By asset type: ${ctx.typeTotals}
 
 PORTFOLIO (${DASHBOARD_NAME} family — ${ctx.holdings.length} holdings):
 ${JSON.stringify(ctx.holdings, null, 2)}
