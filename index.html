@@ -1653,7 +1653,15 @@ async function writePortfolioSnapshot(){
         gainPct,
         cagr!==null ? cagr.toFixed(2)+'%' : '—',
         h.currentNav ? h.currentNav.toFixed(4) : '—',
-        (h.type==='PMS'||h.type==='AIF') ? (h.soaDate||h.navDate||'') : (h.navDate||''), // col N: use soaDate for PMS/AIF
+        // col N: for PMS/AIF only write soaDate if it's recent (≤30d) — otherwise leave blank to preserve HQ Apply's dates
+        (()=>{
+          if(h.type==='PMS'||h.type==='AIF'){
+            if(!h.soaDate) return '';
+            const _d=parseSoaDate(h.soaDate);
+            return (_d&&!isNaN(_d)&&(Date.now()-_d.getTime())<31*86400*1000)?h.soaDate:'';
+          }
+          return h.navDate||'';
+        })(),
         h.purchaseDate||'',
         days+'d',
         h.schemeCode||'',
