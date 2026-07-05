@@ -1653,7 +1653,7 @@ async function writePortfolioSnapshot(){
         gainPct,
         cagr!==null ? cagr.toFixed(2)+'%' : '—',
         h.currentNav ? h.currentNav.toFixed(4) : '—',
-        h.navDate||'',
+        (h.type==='PMS'||h.type==='AIF') ? (h.soaDate||h.navDate||'') : (h.navDate||''), // col N: use soaDate for PMS/AIF
         h.purchaseDate||'',
         days+'d',
         h.schemeCode||'',
