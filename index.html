@@ -2853,7 +2853,11 @@ async function executeAIAction(ck, cardEl){
     const oldDate=h.soaDate||h.navDate||'—';
     const newDate=String(result.new_soa_date||'');
     h.soaDate=newDate; h.navDate=newDate;
-    if(sheetsConnected)writePortfolioSnapshot();
+    if(sheetsConnected){
+      // Write to both snapshot (col N) AND pms_aif_values (col F) for true persistence
+      writePortfolioSnapshot();
+      saveSinglePMSValue(h, h.currentValue, h.invested, newDate).catch(e=>console.warn('pms_aif_values soaDate write failed:',e));
+    }
     logError('ai_p3_write',intent,{investor:h.investor,fund:h.originalName||h.fund,detail:`SOA date: ${oldDate} → ${newDate}`});
     renderAll();
     if(cardEl)cardEl.remove();
@@ -6335,6 +6339,30 @@ async function applySOACard(idx, state, matchedId){
       showSOACardSuccess(cardEl, idx, 'update', fname, val, date, sheetsWarn);
       // ── Duplicate cleanup check (PMS/AIF only) ─────────────────────────────
       if(h.type==='PMS' || h.type==='AIF'){
+        // ── Post-SOA coverage check: warn if same-manager holdings still stale ──
+        const _appliedHouse = h.house || (h.fund||'').split(/[\s-]/)[0] || '';
+        if(_appliedHouse.length >= 3){
+          const _now = Date.now();
+          const _uncovered = portfolioData.filter(x=>{
+            if(x.id===h.id) return false; // skip self
+            if(x.type!=='PMS' && x.type!=='AIF') return false;
+            // Same manager? Match on house field or first word of fund name
+            const _xHouse = x.house || (x.fund||'').split(/[\s-]/)[0] || '';
+            const _matchHouse = _appliedHouse.toLowerCase();
+            if(!_xHouse.toLowerCase().includes(_matchHouse) && !_matchHouse.includes(_xHouse.toLowerCase())) return false;
+            // Still stale?
+            const _d = parseSoaDate(x.soaDate);
+            const _days = _d && !isNaN(_d) ? Math.floor((_now - _d.getTime())/86400000) : null;
+            return _days === null || _days > STALE_PMS_DAYS;
+          });
+          if(_uncovered.length > 0 && cardEl){
+            const _uncoveredList = _uncovered.map(x=>`<li style="margin:2px 0">${sanitize(x.originalName||x.fund||'')} <span style="color:var(--text-muted)">(${sanitize(shortName(x.investor))})</span></li>`).join('');
+            const _coverageBanner = document.createElement('div');
+            _coverageBanner.style.cssText = 'margin-top:10px;padding:10px 14px;background:rgba(232,168,56,0.07);border:1px solid rgba(232,168,56,0.3);border-radius:8px';
+            _coverageBanner.innerHTML = `<div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:5px">⚠ ${_uncovered.length} other ${sanitize(_appliedHouse)}-managed holding${_uncovered.length>1?'s':''} not in this SOA:</div><ul style="margin:0 0 6px 16px;padding:0;font-size:11px;color:var(--text)">${_uncoveredList}</ul><div style="font-size:11px;color:var(--text-muted)">These are still stale — do you have a separate SOA for them?</div>`;
+            cardEl.appendChild(_coverageBanner);
+          }
+        }
         const _dups = findPMSDuplicates(matchedId, fname, inv);
         if(_dups.length > 0 && cardEl){
           const _dupRows = _dups.map(d=>`
