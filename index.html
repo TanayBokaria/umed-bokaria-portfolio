@@ -1322,7 +1322,13 @@ function shortName(n){return n.replace(' Bokaria','').replace(' HUF',' HUF');}
 // ── Staleness helpers (Feature 2) ────────────────────────────────────────
 // Parse soaDate string to Date — handles "02-Apr-2026", "2026-04-02", "02/04/2026"
 function parseSoaDate(str){
-  if(!str) return null;
+  if(!str&&str!==0) return null;
+  // Handle number or numeric-string date serials from Sheets UNFORMATTED_VALUE
+  if(typeof str==='number'||/^\d{5,6}$/.test(String(str))){
+    const n=typeof str==='number'?str:parseInt(str,10);
+    if(n>30000&&n<80000) return new Date((n-25569)*86400*1000);
+    return null;
+  }
   if(/^\d{4}-\d{2}-\d{2}$/.test(str)) return new Date(str+'T00:00:00');
   const MMAP={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
   // DD-Mon-YYYY (dashes) — internal format
@@ -1337,6 +1343,17 @@ function parseSoaDate(str){
   return null;
 }
 
+
+// Universal date serial converter — Sheets returns dates as numbers via UNFORMATTED_VALUE
+// Handles: number (46206), numeric string ("46206"), or already-valid string ("2026-07-03")
+function _ds(raw){
+  if(raw===null||raw===undefined||raw==='') return '';
+  if(typeof raw==='number'&&!isNaN(raw)&&raw>30000&&raw<80000)
+    return new Date((raw-25569)*86400*1000).toISOString().slice(0,10);
+  const s=String(raw).trim();
+  if(/^\d{5,6}$/.test(s)){const n=parseInt(s,10);if(n>30000&&n<80000)return new Date((n-25569)*86400*1000).toISOString().slice(0,10);}
+  return s;
+}
 function renderStalenessPanel(){
   const panel=document.getElementById('stalenessPanel');
   const listEl=document.getElementById('stalenessList');
@@ -4021,7 +4038,7 @@ async function loadFromSheets(){
             invested:parseFloat(row[7])||0, units:parseFloat(row[8])||null,
             navCost:parseFloat(row[9])||null, currentNav:null,
             currentValue:parseFloat(row[10])||0,
-            purchaseDate:row[11]||'', soaDate:row[12]||'',
+            purchaseDate:_ds(row[11]), soaDate:_ds(row[12]),
             schemeCode:row[14]||null,
             originalName:row[15]||row[2]||'',
             currentName:row[16]||row[2]||'',
@@ -4052,7 +4069,7 @@ async function loadFromSheets(){
             const schemeCode=String(row[16]||'').trim();
             const currentVal=parseFloat(String(row[8]||'').replace(/[₹,\s]/g,''));
             const nav=parseFloat(String(row[12]||'').replace(/[₹,\s]/g,''));
-            const navDate=String(row[13]||'').trim();
+            const navDate=_ds(row[13]);
             let h=null;
             if(folio) h=portfolioData.find(x=>x.folio===folio&&x.type==='MF');
             if(!h&&schemeCode) h=portfolioData.find(x=>String(x.schemeCode)===schemeCode&&x.type==='MF');
