@@ -2841,7 +2841,11 @@ function renderAIResponse(result, userInput){
         if(i_days>=0)  return i_days;
         return -1;
       })();
-      if(sortColIdx>=0 && (isDescQuery||isAscQuery)){
+      // Only auto-sort if user asked for a simple top/bottom ranking with no competing sort key
+    // Back off if user said "sorted by X" or "by days" or "ascending/descending by" — trust AI in that case
+    const hasExplicitSortBy = /(?:sort(?:ed)?|order(?:ed)?|rank(?:ed)?|by)\s+(?:days|date|period|hold|invest|alphabeti)/i.test(lq)
+                            || /(?:ascend|descend)\w*\s+order\s+of/i.test(lq);
+    if(sortColIdx>=0 && (isDescQuery||isAscQuery) && !hasExplicitSortBy){
         const parseVal = v=>{
           const s=String(v||'').replace(/[₹+−\-,CrLx%\s]/g,'').split('(')[0];
           return parseFloat(s)||0;
