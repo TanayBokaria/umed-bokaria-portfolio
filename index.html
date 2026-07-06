@@ -1246,6 +1246,7 @@ const MF_NAMES = {'118778':'Nippon Small Cap','148457':'Nippon Multi Asset','148
 const NYSE_HOLDINGS = [];
 let nyseData = NYSE_HOLDINGS.map(h=>({...h, livePrice:null, liveValue:null}));
 let usdInrRate = null;
+const USD_INR_FALLBACK = 95.33; // confirmed FX fallback (handoff §27) — replaces all inline 84.5 literals
 let nyseActiveFilter = 'all';
 let abData = [];          // Aditya Birla equity holdings
 let _pendingABRows = null; // holds parsed rows for review modal — loaded from ab_holdings Sheet tab
@@ -1293,6 +1294,33 @@ let navCache = {}, lastRefreshed = new Date(), activeFilter = 'all';
 let sheetsConfig = null, sheetsConnected = false;
 let memberChartInst = null, categoryChartInst = null;
 // Feature 2 — Staleness thresholds (days)
+// ── portfolio_snapshot column indices (0-based; A=0, B=1 … U=20) ───────────────
+// Single source of truth — all row[N] reads in loadFromSheets and writePortfolioSnapshot
+// reference these names so a schema change only requires editing this block.
+const COL = Object.freeze({
+  asOf:        0,   // A  — snapshot timestamp
+  investor:    1,   // B
+  origName:    2,   // C  — original fund name
+  currName:    3,   // D  — current/display name
+  type:        4,   // E  — MF | PMS | AIF | NYSE | AB Equity
+  category:    5,   // F
+  folio:       6,   // G  — folio / platform / userId
+  invested:    7,   // H
+  value:       8,   // I  — current value
+  gain:        9,   // J
+  gainPct:    10,   // K
+  cagr:       11,   // L
+  nav:        12,   // M  — NAV / price
+  navDate:    13,   // N  — NAV date / SOA date
+  purchaseDate:14,  // O
+  holdingDays:15,   // P
+  schemeCode: 16,   // Q
+  currency:   17,   // R
+  usdValue:   18,   // S
+  units:      19,   // T  — units / qty / shares
+  bank:       20,   // U
+});
+
 const STALE_PMS_DAYS = 30;
 const STALE_AB_DAYS  = 7;
 // Feature 5 — Delta baseline: {holdingId: previousValue} captured before each refresh/save
@@ -1418,7 +1446,7 @@ function captureDeltaBaseline(){
 // TOTALS
 // ═══════════════════════════════════
 function memberTotals(){
-  const fx=usdInrRate||84.5;
+  const fx=usdInrRate||USD_INR_FALLBACK;
   const t={};
   for(const m of Object.keys(MEMBER_META)){
     const h=portfolioData.filter(x=>x.investor===m);
@@ -1442,7 +1470,7 @@ function memberTotals(){
   return t;
 }
 function portfolioTotals(){
-  const fx=usdInrRate||84.5;
+  const fx=usdInrRate||USD_INR_FALLBACK;
   const mfI=portfolioData.reduce((a,h)=>a+h.invested,0);
   const mfC=portfolioData.reduce((a,h)=>a+(h.currentValue||0),0);
   const nyseI=nyseData.reduce((a,h)=>a+(h.qty*h.unitCost*fx),0);
@@ -1453,7 +1481,7 @@ function portfolioTotals(){
   return{invested:i,current:c,gain:c-i,gainPct:i>0?((c-i)/i)*100:0};
 }
 function categoryTotals(){
-  const fx=usdInrRate||84.5;
+  const fx=usdInrRate||USD_INR_FALLBACK;
   const c={};
   portfolioData.forEach(h=>{const k=h.type==='PMS'?'PMS':h.type==='AIF'?'AIF':h.category;c[k]=(c[k]||0)+(h.currentValue||0);});
   // NYSE as its own category
@@ -1614,7 +1642,7 @@ async function refreshNAVs(){
       }
     });
     localStorage.setItem(NAV_CACHE_KEY,JSON.stringify({ts:Date.now(),navs:_navSnap}));
-  }catch(e){}
+  }catch(e){} // non-critical: NAV cache is best-effort; live fetch continues to work
 
   // 4. Write full portfolio snapshot to Sheets — only if NAVs actually loaded (don't overwrite good data with failed-refresh values)
   const navSuccessCount=codes.length-navFetchFailed.length;
@@ -1649,7 +1677,7 @@ async function writePortfolioSnapshot(){
   const token = sheetsConfig.accessToken;
   if(!sheetId||!token) return false;
   try{
-    const fx = usdInrRate||84.5;
+    const fx = usdInrRate||USD_INR_FALLBACK;
     const ts = lastRefreshed.toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 
     // Build rows — MF/PMS/AIF holdings
@@ -1800,7 +1828,7 @@ async function fetchUSDINR(){
   }catch(e){
     logError('fetchUSDINR', e);
     // Fallback to a reasonable rate if API fails
-    if(!usdInrRate) usdInrRate=84.5;
+    if(!usdInrRate) usdInrRate=USD_INR_FALLBACK;
     const _fp2=document.getElementById('fxPill');if(_fp2)_fp2.textContent=`USD/INR: ₹${usdInrRate.toFixed(2)} (cached)`;
   }
 }
@@ -1952,7 +1980,7 @@ function renderNYSE(){
   const data=nyseActiveFilter==='all'?nyseData:nyseData.filter(h=>h.investor===nyseActiveFilter);
   document.getElementById('nyseCount').textContent=nyseData.length+' STOCKS';
   const tbody=document.getElementById('nyseBody');tbody.innerHTML='';
-  const fx=usdInrRate||84.5;
+  const fx=usdInrRate||USD_INR_FALLBACK;
 
   data.forEach(h=>{
     const cost=h.qty*h.unitCost;
@@ -1986,7 +2014,7 @@ function renderNYSE(){
 
   // Footer totals
   const t=nyseTotal(nyseActiveFilter);
-  const fx2=usdInrRate||84.5;
+  const fx2=usdInrRate||USD_INR_FALLBACK;
   document.getElementById('nyseTotalInvested').textContent='$'+t.invested.toLocaleString('en-US',{maximumFractionDigits:0});
   document.getElementById('nyseTotalUSD').textContent='$'+t.value.toLocaleString('en-US',{maximumFractionDigits:0});
   document.getElementById('nyseTotalINR').textContent=fmtCr(t.value*fx2);
@@ -2422,7 +2450,7 @@ function buildAIContext(){
   });
 
   // ── NYSE / US Stocks ─────────────────────────────────────────────────────────
-  const USD_INR = 95.33;
+  const USD_INR = USD_INR_FALLBACK; // alias for AI context
   if(typeof nyseData !== 'undefined'){
     nyseData.forEach(h=>{
       // liveValue = live total USD; if not available, fall back to cost basis (qty*unitCost)
@@ -3941,8 +3969,8 @@ async function submitIssueReport() {
   // status message remains visible until she clicks Cancel or Submit again.
 }
 
-function loadSheetsConfig(){try{const s=localStorage.getItem(LS_KEY);if(s){sheetsConfig=JSON.parse(s);if(sheetsConfig.sheetId&&sheetsConfig.sheetId!==DEFAULT_SHEET_ID){console.warn('loadSheetsConfig: stored sheetId mismatch — overriding with DEFAULT_SHEET_ID');sheetsConfig.sheetId=DEFAULT_SHEET_ID;}return true;}}catch(e){}return false;}
-function saveSheetsConfig(cfg){sheetsConfig=cfg;try{localStorage.setItem(LS_KEY,JSON.stringify({sheetId:cfg.sheetId,clientId:cfg.clientId}));}catch(e){}}
+function loadSheetsConfig(){try{const s=localStorage.getItem(LS_KEY);if(s){sheetsConfig=JSON.parse(s);if(sheetsConfig.sheetId&&sheetsConfig.sheetId!==DEFAULT_SHEET_ID){console.warn('loadSheetsConfig: stored sheetId mismatch — overriding with DEFAULT_SHEET_ID');sheetsConfig.sheetId=DEFAULT_SHEET_ID;}return true;}}catch(e){console.warn('[loadSheetsConfig] localStorage read/parse failed:',e.message);}return false;}
+function saveSheetsConfig(cfg){sheetsConfig=cfg;try{localStorage.setItem(LS_KEY,JSON.stringify({sheetId:cfg.sheetId,clientId:cfg.clientId}));}catch(e){console.warn('[saveSheetsConfig] localStorage write failed:',e.message);}}
 // ── Error Logging (Layer 1) ───────────────────────────────────────────────────
 async function logError(fnName, error, context={}) {
   // Always log to console as baseline
@@ -4017,7 +4045,6 @@ async function connectSheets(){
       renderAll();
       startAutoSync();
   startHqNavPoll(); // begin background sync now that Sheets is connected
-      _updateDataFreshnessFromSnapshot(); // show snapshot coverage immediately on connect
     }
   }).requestAccessToken();
 }
@@ -4815,7 +4842,7 @@ async function confirmDelete(id){
     const dels = JSON.parse(localStorage.getItem('bokaria_umed_deleted')||'[]');
     if(!dels.includes(id)) dels.push(id);
     localStorage.setItem('bokaria_umed_deleted', JSON.stringify(dels));
-  }catch(e){}
+  }catch(e){console.warn('[confirmDelete] localStorage update failed:',e.message);}
   lastRefreshed = new Date();
 
   // Log deletion to Sheets
@@ -7634,6 +7661,7 @@ let _autoSyncTimer    = null;
 let _autoSyncLastRun  = null;
 let _autoSyncRunning  = false;
 const AUTO_SYNC_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
+const HQ_NAV_POLL_MS        = 90_000;           // 90 seconds — poll for HQ NAV refresh signal
 
 async function _runAutoSync(){
   if(!sheetsConnected || _autoSyncRunning) return;
@@ -7642,10 +7670,8 @@ async function _runAutoSync(){
     await loadFromSheets();        // restores NAV values from snapshot silently
     renderAll();                   // refreshes all cards, charts, table
     _autoSyncLastRun = new Date();
-    _updateDataFreshnessFromSnapshot();
-  }
   } catch(e){
-    console.warn('Auto-sync failed:', e.message);
+    console.warn('[autoSync] loadFromSheets failed:', e.message);
   } finally {
     _autoSyncRunning = false;
   }
@@ -7685,7 +7711,7 @@ async function _quickNavPoll(){
     }
   }catch(e){ /* non-critical poll — ignore errors */ }
 }
-function startHqNavPoll(){ _hqNavPollTimer=setInterval(_quickNavPoll,90000); }
+function startHqNavPoll(){ _hqNavPollTimer=setInterval(_quickNavPoll, HQ_NAV_POLL_MS); }
 function stopHqNavPoll(){ if(_hqNavPollTimer){clearInterval(_hqNavPollTimer);_hqNavPollTimer=null;} }
 
 </script>
