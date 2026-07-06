@@ -4015,7 +4015,8 @@ async function connectSheets(){
       closeModal('sheetsModal');
       updateSheetsPill('connected','Sheets: Connected'); _pfHandleSheetsConnect();
       renderAll();
-      startAutoSync(); // begin background sync now that Sheets is connected
+      startAutoSync();
+  startHqNavPoll(); // begin background sync now that Sheets is connected
       _updateDataFreshnessFromSnapshot(); // show snapshot coverage immediately on connect
     }
   }).requestAccessToken();
@@ -4267,11 +4268,13 @@ async function saveToSheets(holdingId, investedToDate, value, asOfDate, updatedB
       const refreshed = await silentTokenRefresh();
       if(refreshed){
         // Retry the save with new token — recursive call
-        if(_retryCount>0){sheetsConnected=false;stopAutoSync();updateSheetsPill('error','Sheets: Session expired');return false;}
+        if(_retryCount>0){sheetsConnected=false;stopAutoSync();
+  stopHqNavPoll();updateSheetsPill('error','Sheets: Session expired');return false;}
         return await saveToSheets(holdingId, investedToDate, value, asOfDate, updatedBy, notes, 1);
       }
       sheetsConnected=false;
       stopAutoSync();
+  stopHqNavPoll();
       updateSheetsPill('error','Sheets: Session expired');
       showToast('Session expired — click <strong>Sheets</strong> (top right) to reconnect.', 'warn', 'Sheets Session Expired');
       return false;
@@ -7626,6 +7629,7 @@ function showConfirm(title, body, onConfirm, {confirmText='Confirm', cancelText=
 // Picks up NAV updates written by HQ Refresh All NAVs or the Apps Script
 // without requiring a manual Refresh NAVs click or page reload.
 
+let _lastKnownHqNavTs = 0;  // nav_refresh_ts from HQ's last Refresh All NAVs (epoch ms)
 let _autoSyncTimer    = null;
 let _autoSyncLastRun  = null;
 let _autoSyncRunning  = false;
@@ -7648,13 +7652,41 @@ async function _runAutoSync(){
 }
 
 function startAutoSync(){
-  stopAutoSync(); // clear any existing timer first
+  stopAutoSync();
+  stopHqNavPoll(); // clear any existing timer first
   _autoSyncTimer = setInterval(_runAutoSync, AUTO_SYNC_INTERVAL_MS);
 }
 
 function stopAutoSync(){
   if(_autoSyncTimer){ clearInterval(_autoSyncTimer); _autoSyncTimer = null; }
 }
+
+// ── HQ NAV sync poll: checks if HQ has refreshed since our last Sheets load ──
+// Runs every 90s; if HQ wrote a newer nav_refresh_ts, reloads from Sheets immediately.
+let _hqNavPollTimer = null;
+async function _quickNavPoll(){
+  if(!sheetsConnected||!sheetsConfig?.accessToken) return;
+  try{
+    const r = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/config!A30:B30`,
+      {headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`}}
+    );
+    if(!r.ok) return;
+    const d = await r.json();
+    const rows = d.values||[];
+    if(!rows.length||String(rows[0][0]||'').trim().toLowerCase()!=='nav_refresh_ts') return;
+    const hqTs = parseInt(rows[0][1])||0;
+    if(hqTs > _lastKnownHqNavTs && hqTs > 0){
+      // HQ refreshed after our last load — pull fresh snapshot data
+      _lastKnownHqNavTs = hqTs;
+      await loadFromSheets();
+      renderAll();
+      console.log('[HQ-sync] Reloaded from Sheets after HQ NAV refresh at', new Date(hqTs).toLocaleTimeString());
+    }
+  }catch(e){ /* non-critical poll — ignore errors */ }
+}
+function startHqNavPoll(){ _hqNavPollTimer=setInterval(_quickNavPoll,90000); }
+function stopHqNavPoll(){ if(_hqNavPollTimer){clearInterval(_hqNavPollTimer);_hqNavPollTimer=null;} }
 
 </script>
 </body>
