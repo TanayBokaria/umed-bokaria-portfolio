@@ -1281,7 +1281,7 @@ function renderAutoRefreshLine(){
     if(s.persistentCodes && s.persistentCodes.length > 0){
       parts.push('\u26a0 '+s.persistentCodes.length+' code'+(s.persistentCodes.length>1?'s':'')+' failing');
     }
-  }catch(e){}
+  }catch(e){} // non-critical: auto-refresh status UI — blank on failure is acceptable
   el.textContent = parts.join(' \u00b7 ');
 }
 let navRenamed = [];       // {id, oldName, newName} updated during last refresh
@@ -4206,14 +4206,14 @@ async function loadFromSheets(){
         const snapRows=snapData.values||[];
         snapRows.forEach(row=>{
           if(!row||row.length<9)return;
-          const type=String(row[4]||'').trim();
+          const type=String(row[COL.type]||'').trim();
           if(type==='MF'){
             // Restore MF holding: currentValue, currentNav, navDate
-            const folio=String(row[6]||'').trim();
-            const schemeCode=String(row[16]||'').trim();
-            const currentVal=parseFloat(String(row[8]||'').replace(/[₹,\s]/g,''));
-            const nav=parseFloat(String(row[12]||'').replace(/[₹,\s]/g,''));
-            const navDate=_ds(row[13]);
+            const folio=String(row[COL.folio]||'').trim();
+            const schemeCode=String(row[COL.schemeCode]||'').trim();
+            const currentVal=parseFloat(String(row[COL.value]||'').replace(/[₹,\s]/g,''));
+            const nav=parseFloat(String(row[COL.nav]||'').replace(/[₹,\s]/g,''));
+            const navDate=_ds(row[COL.navDate]);
             let h=null;
             if(folio) h=portfolioData.find(x=>x.folio===folio&&x.type==='MF');
             if(!h&&schemeCode) h=portfolioData.find(x=>String(x.schemeCode)===schemeCode&&x.type==='MF');
@@ -4225,9 +4225,9 @@ async function loadFromSheets(){
             }
           } else if(type==='NYSE'){
             // Restore NYSE live price — match by symbol + investor (col Q = ticker, col B = investor)
-            const ticker=String(row[16]||'').trim();
-            const investor=String(row[1]||'').trim();
-            const livePrice=parseFloat(String(row[12]||'').replace(/[₹,\s]/g,''));
+            const ticker=String(row[COL.schemeCode]||'').trim();
+            const investor=String(row[COL.investor]||'').trim();
+            const livePrice=parseFloat(String(row[COL.nav]||'').replace(/[₹,\s]/g,''));
             if(!isNaN(livePrice)&&livePrice>0){
               // Primary match: same symbol + same investor; fallback: same symbol + no live price yet
               let h=nyseData.find(x=>x.symbol===ticker&&(x.investor||'')===investor);
@@ -4237,17 +4237,17 @@ async function loadFromSheets(){
           } else if(type==='PMS'||type==='AIF'){
             // Restore soaDate from col N so HQ-Apply dates survive subsequent Refresh NAVs
             // UNFORMATTED_VALUE returns date serials as numbers — convert to YYYY-MM-DD
-            const _col13=row[13];
+            const _colNavDate=row[COL.navDate];
             let snapshotSoaDate='';
-            if(typeof _col13==='number'&&!isNaN(_col13)&&_col13>30000&&_col13<80000){
-              snapshotSoaDate=new Date((_col13-25569)*86400*1000).toISOString().slice(0,10);
+            if(typeof _colNavDate==='number'&&!isNaN(_colNavDate)&&_colNavDate>30000&&_colNavDate<80000){
+              snapshotSoaDate=new Date((_colNavDate-25569)*86400*1000).toISOString().slice(0,10);
             } else {
-              snapshotSoaDate=String(_col13||'').trim();
+              snapshotSoaDate=String(_colNavDate||'').trim();
             }
             if(snapshotSoaDate){
-              const folio=String(row[6]||'').trim();
-              const investor=String(row[1]||'').trim();
-              const fundName=String(row[2]||row[3]||'').trim();
+              const folio=String(row[COL.folio]||'').trim();
+              const investor=String(row[COL.investor]||'').trim();
+              const fundName=String(row[COL.origName]||row[COL.currName]||'').trim();
               let h=null;
               if(folio) h=portfolioData.find(x=>(x.type==='PMS'||x.type==='AIF')&&String(x.folio||'')===folio&&x.investor===investor);
               if(!h&&fundName) h=portfolioData.find(x=>(x.type==='PMS'||x.type==='AIF')&&(x.fund===fundName||x.originalName===fundName)&&x.investor===investor);
@@ -4257,8 +4257,8 @@ async function loadFromSheets(){
         // Prefer the more recent of the two; if pms_aif_values was already set, keep it unless snapshot is newer
         if(!pmsSoa || snapshotSoaDate >= pmsSoa) h.soaDate = snapshotSoaDate;
       }
-      // col U — bank name
-      if(h && row[20] && String(row[20]).trim()) h.bank = String(row[20]).trim();
+      // col U (bank) — read separately since snapshot!A2:T only covers 20 cols (A–T)
+      if(h && row[COL.bank] && String(row[COL.bank]).trim()) h.bank = String(row[COL.bank]).trim();
             }
           }
           // Timestamp restore removed — GSheets serial ≠ JS milliseconds (causes Jan 1970 bug)
@@ -4522,7 +4522,7 @@ async function selectSchemeCode(code, name, el){
       document.getElementById('schemeSearchStatus').textContent =
         `✓ Scheme ${code} selected · Current NAV: ₹${nav} (${date}) · pre-filled above`;
     }
-  } catch(e){}
+  } catch(e){} // non-critical: NAV pre-fill failure — user can still add fund without it
 
   // Update official fund name hint
   document.getElementById('schemeSearchStatus').style.color = 'var(--green)';
@@ -5108,7 +5108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(c){h.currentNav=c.nav;h.navDate=c.date;if(h.type==='MF'&&h.units>0)h.currentValue=h.units*c.nav;}
       });
     }
-  }catch(e){}
+  }catch(e){} // non-critical: localStorage NAV cache restore — NAVs fetched fresh on first refresh
   renderAll();
   fetchUSDINR(); // pre-load FX rate on startup
 
@@ -7566,7 +7566,7 @@ function _pfHandleSheetsConnect(){
     btn.style.color=allOk?'var(--green)':'var(--red)';
     btn.title=allOk?'All systems healthy ✅':'Issues detected — click for details';
     if(!allOk){const panel=document.getElementById('preflightPanel');if(panel){panel.style.display='block';await runPreflightCheck();}}
-  }catch(e){}
+  }catch(e){} // non-critical: startup preflight — manual Health button still functional
 })();
 
 </script>
