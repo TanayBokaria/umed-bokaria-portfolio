@@ -4229,6 +4229,8 @@ async function loadFromSheets(){
         // Prefer the more recent of the two; if pms_aif_values was already set, keep it unless snapshot is newer
         if(!pmsSoa || snapshotSoaDate >= pmsSoa) h.soaDate = snapshotSoaDate;
       }
+      // col U — bank name
+      if(h && row[20] && String(row[20]).trim()) h.bank = String(row[20]).trim();
             }
           }
           // Timestamp restore removed — GSheets serial ≠ JS milliseconds (causes Jan 1970 bug)
