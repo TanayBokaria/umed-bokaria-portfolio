@@ -2500,7 +2500,9 @@ function buildAIContext(){
   // Also compute per-investor invested totals (raw from PORTFOLIO not context)
   const _investorInvested = {};
   const _investorCount = {};
-  (typeof PORTFOLIO!=='undefined'?PORTFOLIO:[]).concat(typeof nyseData!=='undefined'?nyseData.map(h=>({...h,type:'NYSE'})):[]).forEach(h=>{
+  (typeof PORTFOLIO!=='undefined'?PORTFOLIO:[]).concat(
+    typeof nyseData!=='undefined'?nyseData.map(h=>({...h,invested:(h.qty||0)*(h.unitCost||0)*((typeof fxRate!=='undefined'?fxRate:null)||h.fxRate||85)})):[]
+  ).forEach(h=>{
     const inv = h.investor||'Unknown';
     const inv_amt = typeof h.invested==='number' ? h.invested : (parseFloat(h.invested)||0);
     _investorInvested[inv] = (_investorInvested[inv]||0) + inv_amt;
@@ -2591,7 +2593,7 @@ ANALYSIS QUERY RULES — critical for accuracy:
   - "descending order of days held" → sort rows so the LARGEST holdingDays is in row 1. Never sort ascending when user says descending.
   - Concrete example: days = [81, 276, 725, 999], user asked DESC → output row order must be [999, 725, 276, 81].
   - "top N" → best N values. "bottom N" → worst N values.
-- "Poorest/best/top/bottom N performers": default to 10 rows unless a specific number is stated. Use CAGR for ranking when the holding period varies across holdings, so short-term winners don't dominate; use total Return % only when all holdings have similar ages or the user explicitly asks for it.
+- "Poorest/best/top/bottom N performers": return AT LEAST 10 rows unless the user asks for fewer. Never return only 4 or 5 rows for a "show me the poorest/best" query without a specific N. Use CAGR for ranking when the holding period varies across holdings, so short-term winners don't dominate; use total Return % only when all holdings have similar ages or the user explicitly asks for it.
 - "Best CAGR" queries: exclude holdings with fewer than 90 days since purchase (CAGR is unreliable for very new holdings). Note any exclusions in response_text.
 
 PHASE 2 — METADATA CORRECTION INTENTS (is_read_only=false, all require confirm card):
@@ -2826,7 +2828,19 @@ function renderAIResponse(result, userInput){
       const isDescQuery = /top|highest|best|largest|most|descend/i.test(lq);
       const isAscQuery  = /worst|poorest|lowest|smallest|least|ascend/i.test(lq);
       // Find a CAGR or % column to sort by
-      const sortColIdx = td.headers.findIndex(h=>/cagr|return|%|value|days/i.test(h));
+      // Priority: CAGR > Return% > Value > Days Held (more specific first)
+      const sortColIdx = (() => {
+        const hs = td.headers;
+        const i_cagr  = hs.findIndex(h=>/\bcagr\b/i.test(h));
+        const i_ret   = hs.findIndex(h=>/return|yield/i.test(h));
+        const i_cur   = hs.findIndex(h=>/current.*val|today.*val/i.test(h));
+        const i_days  = hs.findIndex(h=>/days|period|held/i.test(h));
+        if(i_cagr>=0)  return i_cagr;
+        if(i_ret>=0)   return i_ret;
+        if(i_cur>=0)   return i_cur;
+        if(i_days>=0)  return i_days;
+        return -1;
+      })();
       if(sortColIdx>=0 && (isDescQuery||isAscQuery)){
         const parseVal = v=>{
           const s=String(v||'').replace(/[₹+−\-,CrLx%\s]/g,'').split('(')[0];
