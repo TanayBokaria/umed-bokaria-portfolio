@@ -2614,7 +2614,7 @@ PHASE 5 — FILE WORKFLOW GUIDANCE:
 
 // ── Call Gemini (gemini-3.5-flash for the command bar) ────────────────────────
 async function callGeminiAI(userInput){
-  const keys = await loadGeminiKeys();
+  const keys = await getGeminiKeys();
   if(!keys||!keys.length) throw new Error('No Gemini API key configured.');
   const key = keys[_geminiKeyIdx % keys.length];
   const sysPrompt = buildAISystemPrompt();
@@ -3225,7 +3225,7 @@ async function readFileAsText(file){
 
 // ── Gemini extraction call ────────────────────────────────────────────────────
 async function extractHoldingsFromFile(fileContent, fileName, userMessage){
-  const keys = await loadGeminiKeys();
+  const keys = await getGeminiKeys();
   if(!keys || !keys.length) throw new Error('No Gemini API key configured. Add one in the Sheets config tab.');
 
   const investors = [...new Set(portfolioData.map(h => h.investor))];
