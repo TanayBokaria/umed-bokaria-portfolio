@@ -2573,7 +2573,10 @@ TABLE_DATA RULES — use table_data whenever the answer is a list or comparison:
 ANALYSIS QUERY RULES — critical for accuracy:
 - CAGR vs Return%: "CAGR" means ANNUALISED return = ((currentValue/invested)^(365/holdingDays) − 1) × 100. "Return %" means total return = ((currentValue−invested)/invested) × 100. Use the correct metric. Do NOT use total return when the user asks for CAGR.
 - "Days held" / "holding period": ALWAYS include a "Days Held" or "Holding Period" column when the user mentions sorting or filtering by it. Compute holdingDays from purchaseDate to today.
-- Sorting: honour the user's explicit sort instruction exactly (e.g. "descending order of days held" = sort by holdingDays DESC). Do not substitute a different sort key.
+- Sorting: honour the user's explicit sort instruction exactly.
+  - "descending order of days held" → sort rows so the LARGEST holdingDays is in row 1. Never sort ascending when user says descending.
+  - Concrete example: days = [81, 276, 725, 999], user asked DESC → output row order must be [999, 725, 276, 81].
+  - "top N" → best N values. "bottom N" → worst N values.
 - "Poorest/best/top/bottom N performers": default to 10 rows unless a specific number is stated. Use CAGR for ranking when the holding period varies across holdings, so short-term winners don't dominate; use total Return % only when all holdings have similar ages or the user explicitly asks for it.
 - "Best CAGR" queries: exclude holdings with fewer than 90 days since purchase (CAGR is unreliable for very new holdings). Note any exclusions in response_text.
 
