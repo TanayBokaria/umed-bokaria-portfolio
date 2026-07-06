@@ -2497,9 +2497,23 @@ function buildAIContext(){
     _typeTotals[t] = (_typeTotals[t] || 0) + inrVal;
   });
   const fmtCrCtx = v => v >= 1e7 ? '₹'+(v/1e7).toFixed(2)+'Cr' : '₹'+(v/1e5).toFixed(2)+'L';
+  // Also compute per-investor invested totals (raw from PORTFOLIO not context)
+  const _investorInvested = {};
+  const _investorCount = {};
+  (typeof PORTFOLIO!=='undefined'?PORTFOLIO:[]).concat(typeof nyseData!=='undefined'?nyseData.map(h=>({...h,type:'NYSE'})):[]).forEach(h=>{
+    const inv = h.investor||'Unknown';
+    const inv_amt = typeof h.invested==='number' ? h.invested : (parseFloat(h.invested)||0);
+    _investorInvested[inv] = (_investorInvested[inv]||0) + inv_amt;
+    _investorCount[inv] = (_investorCount[inv]||0) + 1;
+  });
+
   const investorTotalsStr = Object.entries(_investorTotals)
     .sort((a,b)=>b[1]-a[1])
-    .map(([inv,v])=>`${inv}: ${fmtCrCtx(v)} total`).join('; ');
+    .map(([inv,v])=>{
+      const inv_amt = _investorInvested[inv]||0;
+      const cnt = _investorCount[inv]||0;
+      return `${inv}: current=${fmtCrCtx(v)}, invested=${fmtCrCtx(inv_amt)}, holdings=${cnt}`;
+    }).join('; ');
   const typeTotalsStr = Object.entries(_typeTotals)
     .map(([t,v])=>`${t}: ${fmtCrCtx(v)}`).join('; ');
   const grandTotal = fmtCrCtx(Object.values(_investorTotals).reduce((s,v)=>s+v,0));
@@ -2805,7 +2819,25 @@ function renderAIResponse(result, userInput){
 
   if(result.is_read_only){
     // Query or briefing — show response text + optional table
-    const tableHtml = renderTableData(result.table_data);
+    // Auto-sort table if AI returned rows out of order for ranking queries
+    const td = result.table_data;
+    if(td && td.rows && td.rows.length > 1){
+      const lq = (userInput||'').toLowerCase();
+      const isDescQuery = /top|highest|best|largest|most|descend/i.test(lq);
+      const isAscQuery  = /worst|poorest|lowest|smallest|least|ascend/i.test(lq);
+      // Find a CAGR or % column to sort by
+      const sortColIdx = td.headers.findIndex(h=>/cagr|return|%|value|days/i.test(h));
+      if(sortColIdx>=0 && (isDescQuery||isAscQuery)){
+        const parseVal = v=>{
+          const s=String(v||'').replace(/[₹+−\-,CrLx%\s]/g,'').split('(')[0];
+          return parseFloat(s)||0;
+        };
+        td.rows = [...td.rows].sort((a,b)=>
+          isDescQuery ? parseVal(b[sortColIdx])-parseVal(a[sortColIdx])
+                      : parseVal(a[sortColIdx])-parseVal(b[sortColIdx]));
+      }
+    }
+    const tableHtml = renderTableData(td);
     const txt = result.response_text || 'Done.';
     appendAIMsg('ai', tableHtml ? `${txt}<br>${tableHtml}` : txt);
     return;
