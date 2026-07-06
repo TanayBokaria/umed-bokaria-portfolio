@@ -2707,8 +2707,8 @@ function renderTableData(td){
   }).join('');
   const tableId = 'ait_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
   window._aiTableData = window._aiTableData||{}; window._aiTableData[tableId]=td;
-  const exportBtn = '<button class="ai-table-export-btn" onclick="exportAITableToExcel(''+tableId+'')" title="Export to Excel">⬇ Excel</button>';
-  return '<div class="ai-table-wrap">'+exportBtn+'<table class="ai-table" id="'+tableId+'"><thead><tr>'+ths+'</tr></thead><tbody>'+trs+'</tbody></table></div>';
+  const exportBtn = `<button class="ai-table-export-btn" data-tid="${tableId}" onclick="exportAITableToExcel(this.dataset.tid)" title="Export to Excel">⬇ Excel</button>`;
+  return `<div class="ai-table-wrap">${exportBtn}<table class="ai-table" id="${tableId}"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
 }
 
 async function exportAITableToExcel(tableId){
