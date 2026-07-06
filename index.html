@@ -364,6 +364,8 @@
     .ai-table tr:last-child td{border-bottom:none;}
     .ai-table tbody tr:hover td{background:var(--surface);transition:background 0.1s;}
     .ai-table td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--accent);}
+    .ai-table-export-btn{display:block;margin-bottom:6px;padding:4px 12px;font-size:11px;font-weight:500;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--green);transition:background .15s;}
+    .ai-table-export-btn:hover{background:var(--green);color:#fff;}
     .ai-table td.pos{color:#4ade80;font-weight:600;}
     .ai-table td.neg{color:var(--red);font-weight:600;}
     .ai-table-wrap{overflow-x:auto;margin:4px 0;}
@@ -2568,6 +2570,13 @@ TABLE_DATA RULES — use table_data whenever the answer is a list or comparison:
 - Set table_data: null for simple one-liner answers
 - IMPORTANT: If the full dataset would exceed 30 rows (e.g. all AB equity positions across all families, all MF holdings), return a SUMMARY table instead (e.g. Family | Investor | Positions | Total Value) and add a note in response_text saying "For individual positions, open the family dashboard." Never generate table_data with more than 30 rows.
 
+ANALYSIS QUERY RULES — critical for accuracy:
+- CAGR vs Return%: "CAGR" means ANNUALISED return = ((currentValue/invested)^(365/holdingDays) − 1) × 100. "Return %" means total return = ((currentValue−invested)/invested) × 100. Use the correct metric. Do NOT use total return when the user asks for CAGR.
+- "Days held" / "holding period": ALWAYS include a "Days Held" or "Holding Period" column when the user mentions sorting or filtering by it. Compute holdingDays from purchaseDate to today.
+- Sorting: honour the user's explicit sort instruction exactly (e.g. "descending order of days held" = sort by holdingDays DESC). Do not substitute a different sort key.
+- "Poorest/best/top/bottom N performers": default to 10 rows unless a specific number is stated. Use CAGR for ranking when the holding period varies across holdings, so short-term winners don't dominate; use total Return % only when all holdings have similar ages or the user explicitly asks for it.
+- "Best CAGR" queries: exclude holdings with fewer than 90 days since purchase (CAGR is unreliable for very new holdings). Note any exclusions in response_text.
+
 PHASE 2 — METADATA CORRECTION INTENTS (is_read_only=false, all require confirm card):
 - fix_scheme_code: user wants to fix/correct a scheme code number. Populate new_scheme_code (string). action_preview: "Fix scheme code for [Fund] ([Investor]): [old schemeCode] → [new_scheme_code]". Requires_clarification=true unless the new code is explicitly stated as a number.
 - update_folio: user wants to change a folio number. Populate new_folio (string). action_preview: "Update folio for [Fund] ([Investor]): [old folio] → [new_folio]"
@@ -2696,7 +2705,60 @@ function renderTableData(td){
     const cells = row.map(c=>{const cls=cellClass(String(c||''));return '<td'+(cls?' class="'+cls+'"':'')+'>'+String(c??'')+'</td>';}).join('');
     return '<tr>'+cells+'</tr>';
   }).join('');
-  return '<div class="ai-table-wrap"><table class="ai-table"><thead><tr>'+ths+'</tr></thead><tbody>'+trs+'</tbody></table></div>';
+  const tableId = 'ait_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+  window._aiTableData = window._aiTableData||{}; window._aiTableData[tableId]=td;
+  const exportBtn = '<button class="ai-table-export-btn" onclick="exportAITableToExcel(''+tableId+'')" title="Export to Excel">⬇ Excel</button>';
+  return '<div class="ai-table-wrap">'+exportBtn+'<table class="ai-table" id="'+tableId+'"><thead><tr>'+ths+'</tr></thead><tbody>'+trs+'</tbody></table></div>';
+}
+
+async function exportAITableToExcel(tableId){
+  const td = window._aiTableData?.[tableId];
+  if(!td) return;
+  const btn = document.querySelector('.ai-table-export-btn');
+  const origText = btn?.textContent || '⬇ Excel';
+  if(btn){ btn.textContent='Exporting…'; btn.disabled=true; }
+  try{
+    // Build CSV as fallback first, try ExcelJS if available
+    const rows = [td.headers, ...td.rows];
+    if(typeof ExcelJS !== 'undefined'){
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Portfolio Analysis');
+      ws.addRows(rows);
+      // Style header row
+      const headerRow = ws.getRow(1);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3C5E' } };
+      headerRow.height = 18;
+      // Auto-width columns
+      td.headers.forEach((h, i) => {
+        const maxLen = Math.max(h.length, ...td.rows.map(r => String(r[i]||'').length));
+        ws.getColumn(i+1).width = Math.min(Math.max(maxLen + 2, 10), 40);
+      });
+      // Right-align numeric columns
+      td.headers.forEach((h, i) => {
+        const isNumCol = td.rows.some(r => /^[+\-−]?[₹\d]/.test(String(r[i]||'')));
+        if(isNumCol) ws.getColumn(i+1).alignment = { horizontal: 'right' };
+      });
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url;
+      a.download = 'portfolio_analysis_'+new Date().toISOString().slice(0,10)+'.xlsx';
+      a.click(); URL.revokeObjectURL(url);
+    } else {
+      // CSV fallback
+      const csv = rows.map(r => r.map(c => '"'+String(c||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url;
+      a.download = 'portfolio_analysis_'+new Date().toISOString().slice(0,10)+'.csv';
+      a.click(); URL.revokeObjectURL(url);
+    }
+    if(btn){ btn.textContent='✓ Downloaded'; setTimeout(()=>{ btn.textContent=origText; btn.disabled=false; },2000); }
+  } catch(e){
+    console.error('Export error:', e);
+    if(btn){ btn.textContent='❌ Failed'; setTimeout(()=>{ btn.textContent=origText; btn.disabled=false; },2000); }
+  }
 }
 
 function appendAIMsg(type, html){
