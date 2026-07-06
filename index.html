@@ -4223,7 +4223,12 @@ async function loadFromSheets(){
               let h=null;
               if(folio) h=portfolioData.find(x=>(x.type==='PMS'||x.type==='AIF')&&String(x.folio||'')===folio&&x.investor===investor);
               if(!h&&fundName) h=portfolioData.find(x=>(x.type==='PMS'||x.type==='AIF')&&(x.fund===fundName||x.originalName===fundName)&&x.investor===investor);
-              if(h && snapshotSoaDate) h.soaDate=snapshotSoaDate;
+              // Only use snapshot soaDate if pms_aif_values didn't already provide a newer one
+      if(h && snapshotSoaDate){
+        const pmsSoa = h._pmsSoaDate||h.soaDate;  // soaDate set by pms_aif_values read
+        // Prefer the more recent of the two; if pms_aif_values was already set, keep it unless snapshot is newer
+        if(!pmsSoa || snapshotSoaDate >= pmsSoa) h.soaDate = snapshotSoaDate;
+      }
             }
           }
           // Timestamp restore removed — GSheets serial ≠ JS milliseconds (causes Jan 1970 bug)
