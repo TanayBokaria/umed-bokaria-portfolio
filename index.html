@@ -4161,7 +4161,7 @@ async function loadFromSheets(){
         const newInvested = parseFloat(invRaw);
         const newValue    = parseFloat(valRaw);
         if(!isNaN(newInvested) && newInvested>0) h.invested     = newInvested;
-        if(!isNaN(newValue)    && newValue>0)    h.currentValue = newValue;
+        if(!isNaN(newValue)    && newValue>0)  { h.currentValue = newValue; h._pmsSoaSet = true; } // flag: pms_aif_values is authoritative; snapshot col I won't override
         if(dateRaw) h.soaDate = dateRaw;
         synced++;
       }
@@ -4265,6 +4265,23 @@ async function loadFromSheets(){
               if(h){ h.livePrice=livePrice; h.liveValue=h.qty*livePrice; navRestored++; }
             }
           } else if(type==='PMS'||type==='AIF'){
+            // Restore currentValue from col I when pms_aif_values has no entry for this holding.
+            // pms_aif_values is the primary source; if it's empty, snapshot col I (written by HQ Apply
+            // or a previous writePortfolioSnapshot) prevents the hardcoded seed value from overriding.
+            const _snapValue = parseFloat(row[COL.value])||0;
+            if(_snapValue > 0){
+              // Only update if snapshot has a real value (not zero/missing)
+              // Find the holding: prefer folio match, fall back to fund+investor
+              const _folio   = String(row[COL.folio]||'').trim();
+              const _investor= String(row[COL.investor]||'').trim();
+              const _fund    = String(row[COL.origName]||row[COL.currName]||'').trim();
+              let _hv = null;
+              if(_folio) _hv = portfolioData.find(x=>(x.type==='PMS'||x.type==='AIF')&&String(x.folio||'')===_folio&&x.investor===_investor);
+              if(!_hv&&_fund) _hv = portfolioData.find(x=>(x.type==='PMS'||x.type==='AIF')&&(x.fund===_fund||x.originalName===_fund)&&x.investor===_investor);
+              // Only override if pms_aif_values hasn't already set a value (i.e. currentValue is still at seed)
+              // We detect "seed still active" by checking if h._pmsSoaSet is not true
+              if(_hv && !_hv._pmsSoaSet) _hv.currentValue = _snapValue;
+            }
             // Restore soaDate from col N so HQ-Apply dates survive subsequent Refresh NAVs
             // UNFORMATTED_VALUE returns date serials as numbers — convert to YYYY-MM-DD
             const _colNavDate=row[COL.navDate];
