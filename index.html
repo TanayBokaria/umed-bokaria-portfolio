@@ -1804,6 +1804,14 @@ async function writePortfolioSnapshot(){
       console.warn('Snapshot write: 0 cells updated — silent write failure');
       return false;
     }
+    // Signal HQ: write snapshot_ts so HQ auto-reloads within 90s (dashboard→HQ direction)
+    // config!A31:B31 is the dedicated snapshot signal row — HQ polls it every 90s
+    fetchWithTimeout(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/config!A31:B31?valueInputOption=RAW`,
+      {method:'PUT', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+       body: JSON.stringify({values:[['snapshot_ts', Date.now()]]})}, 6000
+    ).catch(()=>{}); // non-critical — HQ will also pick up on next Reload Data
+
     return true;
   }catch(e){
     console.error('writePortfolioSnapshot error:', e); logError('writePortfolioSnapshot',e);
