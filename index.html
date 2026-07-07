@@ -4196,7 +4196,37 @@ async function loadFromSheets(){
     // Load AB equity holdings from ab_holdings tab
     await loadABHoldingsFromSheets();
 
-    // Restore last NAV snapshot for MF holdings (so page reload shows saved values, not hardcoded baseline)
+    // ── Redemptions: auto-delete holdings marked redeemed via HQ audit ─────────────
+    // HQ writes fund+investor to the redemptions tab when Priya clicks "Delete from dashboard too".
+    // This read keeps the dashboard in sync without requiring a manual delete.
+    try{
+      const redemUrl=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/redemptions!A2:E1000`;
+      const redemR=await fetchWithTimeout(redemUrl,{headers:{Authorization:`Bearer ${sheetsConfig.accessToken}`}});
+      if(redemR.ok){
+        const redemData=await redemR.json();
+        const redemRows=(redemData.values||[]).filter(r=>r&&String(r[0]||'').trim());
+        if(redemRows.length){
+          let dels=[];
+          try{dels=JSON.parse(localStorage.getItem('bokaria_umed_deleted')||'[]');}catch(e){}
+          let changed=false;
+          redemRows.forEach(row=>{
+            const rFund=String(row[0]||'').trim();
+            const rInv =String(row[1]||'').trim();
+            // Find in portfolioData by fund name + investor (folio in row[3] as secondary key)
+            let h=null;
+            if(rInv) h=portfolioData.find(x=>(x.fund===rFund||x.originalName===rFund)&&x.investor===rInv);
+            if(!h)    h=portfolioData.find(x=>(x.fund===rFund||x.originalName===rFund));
+            if(h&&!dels.includes(h.id)){ dels.push(h.id); changed=true; }
+          });
+          if(changed){
+            try{localStorage.setItem('bokaria_umed_deleted',JSON.stringify(dels));}catch(e){}
+            portfolioData=portfolioData.filter(h=>!dels.includes(h.id));
+          }
+        }
+      }
+    }catch(e){} // non-critical: redemptions tab may not exist yet (new feature)
+
+        // Restore last NAV snapshot for MF holdings (so page reload shows saved values, not hardcoded baseline)
     let navRestored = 0;
     try{
       const snapUrl=`https://sheets.googleapis.com/v4/spreadsheets/${sheetsConfig.sheetId}/values/portfolio_snapshot!A2:T5000?valueRenderOption=UNFORMATTED_VALUE`;
