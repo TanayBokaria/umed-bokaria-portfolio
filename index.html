@@ -3938,6 +3938,23 @@ async function submitIssueReport() {
   ];
   if (sheetId && token) {
     try {
+      // Ensure the error_log tab exists — silently ignored if it already does
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
+        { method:'POST', headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
+          body: JSON.stringify({requests:[{addSheet:{properties:{title:'error_log',
+            gridProperties:{rowCount:5000,columnCount:8}}}}]})}
+      ).catch(()=>{}); // non-critical — throws harmlessly if tab already exists
+      // Write header row first time (append won't overwrite existing rows)
+      const headers = [['Timestamp','Dashboard','Type','Investor','Fund','Description','Files/Drive','Reporter']];
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/error_log!A1:H1?valueInputOption=USER_ENTERED`,
+        { method:'GET', headers:{'Authorization':`Bearer ${token}`}}
+      ).then(async r=>{ if(r.ok){ const d=await r.json(); if(!(d.values?.length)) {
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/error_log!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+          {method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
+           body:JSON.stringify({values:headers})});
+      }}}).catch(()=>{});
       await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/error_log!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
         { method:'POST',
@@ -3997,6 +4014,11 @@ async function logError(fnName, error, context={}) {
     'auto'
   ];
   try {
+    // Ensure tab exists (no-op if it already does)
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
+      {method:'POST',headers:{'Authorization':`Bearer ${sheetsConfig.accessToken}`,'Content-Type':'application/json'},
+       body:JSON.stringify({requests:[{addSheet:{properties:{title:'error_log',gridProperties:{rowCount:5000,columnCount:8}}}}]})}
+    ).catch(()=>{});
     await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/error_log!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       { method:'POST',
